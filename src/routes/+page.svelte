@@ -1,22 +1,13 @@
 <script lang="ts">
 	import { onMount, onDestroy } from 'svelte';
 
-	const heroVideos = [
-		'/hero-futbol1.mp4',
-		'/hero-futbol2.mp4',
-		'/hero-futbol3.mp4',
-		'/hero-futbol4.mp4'
+	const heroImages = [
+		'/fondo-hero.png',
+		'/fondo-hero2.png',
+		'/fondo-hero4.png',
+		'/fondo-hero5.png',
+		'/fondo-hero6.png'
 	];
-	let currentVideo = 0;
-	let videoEl: HTMLVideoElement;
-
-	function nextVideo() {
-		currentVideo = (currentVideo + 1) % heroVideos.length;
-		if (videoEl) {
-			videoEl.src = heroVideos[currentVideo];
-			videoEl.play();
-		}
-	}
 
 	// Primer partido del Mundial: México vs Rep. Checa, 11 jun 21:00 CDT = 12 jun 01:00 UTC
 	const openingMatch = new Date('2026-06-12T01:00:00Z');
@@ -93,33 +84,12 @@
 
 <div class="home">
 
-	<!-- ═══ COUNTDOWN STRIP ═══ -->
-	<div class="opening-strip">
-		<span class="strip-label">Inicio del Mundial</span>
-		<span class="strip-match">🇲🇽 México vs Rep. Checa 🇨🇿</span>
-		<span class="strip-cd">
-			<span class="strip-num">{pad(opening.days)}</span><span class="strip-unit">d</span>
-			<span class="strip-sep">:</span>
-			<span class="strip-num">{pad(opening.hours)}</span><span class="strip-unit">h</span>
-			<span class="strip-sep">:</span>
-			<span class="strip-num">{pad(opening.mins)}</span><span class="strip-unit">m</span>
-			<span class="strip-sep blink">:</span>
-			<span class="strip-num cd-secs">{pad(opening.secs)}</span><span class="strip-unit">s</span>
-		</span>
-		<span class="strip-venue">11 jun · 21:00 hs · AT&T Stadium, Dallas</span>
-	</div>
-
 	<!-- ═══ HERO ═══ -->
 	<section class="hero">
-		<div class="video-bg" aria-hidden="true">
-			<video
-				bind:this={videoEl}
-				src={heroVideos[currentVideo]}
-				autoplay
-				muted
-				playsinline
-				on:ended={nextVideo}
-			></video>
+		<div class="img-bg" aria-hidden="true">
+			{#each heroImages as img, i}
+				<div class="img-slide" style="background-image: url({img}); animation-delay: {i * 5}s"></div>
+			{/each}
 			<div class="video-overlay"></div>
 		</div>
 
@@ -127,27 +97,51 @@
 			<!-- Left: main card -->
 			<div class="hero-card">
 				<div class="hero-eyebrow">CÍCLICO · ARGENTINA · MUNDIAL 2026</div>
-				<h1 class="hero-title">El Mundial<br><span class="hero-accent">es Cíclico</span></h1>
-				<p class="hero-lead">¿Qué pasaría si los países compitieran por sus datos en vez de por goles?</p>
+				<div class="hero-card-body">
+					<img src="/Logos-CICLICO-Mundial-blanco.png" alt="Cíclico" class="hero-logo" />
+					<div class="hero-card-text">
+						<h1 class="hero-title">El Mundial<br><span class="hero-accent">es Cíclico</span></h1>
+						<p class="hero-lead">¿Qué pasaría si los países compitieran por sus datos en vez de por goles?</p>
+					</div>
+				</div>
 			</div>
 
-			<!-- Right: section buttons -->
-			<nav class="hero-nav-grid" aria-label="Secciones">
-				{#each sections as s}
-					<a href={s.href} class="hero-nav-btn">
-						<span class="hnb-num">{s.num}</span>
-						<span class="hnb-label">{s.label}</span>
-						<span class="hnb-arrow">→</span>
-					</a>
-				{/each}
-			</nav>
+			<!-- Right: countdown card + section buttons -->
+			<div class="hero-right">
+				<!-- Countdown card -->
+				<div class="hero-cd-card">
+					<div class="hcd-label">Inicio del Mundial</div>
+					<div class="hcd-match">🇲🇽 <span>México vs Rep. Checa</span> 🇨🇿</div>
+					<div class="hcd-timer">
+						<div class="hcd-unit"><span class="hcd-num">{pad(opening.days)}</span><span class="hcd-lbl">días</span></div>
+						<span class="hcd-sep">:</span>
+						<div class="hcd-unit"><span class="hcd-num">{pad(opening.hours)}</span><span class="hcd-lbl">hs</span></div>
+						<span class="hcd-sep">:</span>
+						<div class="hcd-unit"><span class="hcd-num">{pad(opening.mins)}</span><span class="hcd-lbl">min</span></div>
+						<span class="hcd-sep blink">:</span>
+						<div class="hcd-unit"><span class="hcd-num hcd-secs">{pad(opening.secs)}</span><span class="hcd-lbl">seg</span></div>
+					</div>
+					<div class="hcd-venue">11 jun · 21:00 hs · AT&T Stadium, Dallas</div>
+				</div>
+
+				<!-- Section buttons -->
+				<nav class="hero-nav-grid" aria-label="Secciones">
+					{#each sections as s}
+						<a href={s.href} class="hero-nav-btn">
+							<span class="hnb-num">{s.num}</span>
+							<span class="hnb-label">{s.label}</span>
+							<span class="hnb-arrow">→</span>
+						</a>
+					{/each}
+				</nav>
+			</div>
 		</div>
 	</section>
 
 	<!-- ═══ ARGENTINA ═══ -->
 	<section class="arg-section">
 
-		<!-- Left: squad -->
+		<!-- Left: squad + injuries -->
 		<div class="squad-panel">
 			<div class="squad-header">
 				<span class="squad-flag">🇦🇷</span>
@@ -161,7 +155,7 @@
 				<div class="squad-group">
 					<div class="squad-pos">Arqueros</div>
 					<div class="squad-names">
-						<span>Emiliano "Dibu" Martínez</span>
+						<span class="sq-injury">Emiliano "Dibu" Martínez</span>
 						<span>Gerónimo Rulli</span>
 						<span>Juan Musso</span>
 					</div>
@@ -169,11 +163,11 @@
 				<div class="squad-group">
 					<div class="squad-pos">Defensores</div>
 					<div class="squad-names">
-						<span>Nahuel Molina</span>
-						<span>Cristian "Cuti" Romero</span>
+						<span class="sq-injury">Nahuel Molina</span>
+						<span class="sq-injury">Cristian "Cuti" Romero</span>
 						<span>Nicolás Otamendi</span>
 						<span>Nicolás Tagliafico</span>
-						<span>Gonzalo Montiel</span>
+						<span class="sq-injury">Gonzalo Montiel</span>
 						<span>Leonardo Balerdi</span>
 						<span>Lisandro Martínez</span>
 						<span>Facundo Medina</span>
@@ -186,7 +180,7 @@
 						<span>Alexis Mac Allister</span>
 						<span>Enzo Fernández</span>
 						<span>Exequiel Palacios</span>
-						<span>Leandro Paredes</span>
+						<span class="sq-injury">Leandro Paredes</span>
 						<span>Valentín Barco</span>
 						<span>Giovani Lo Celso</span>
 						<span>Giuliano Simeone</span>
@@ -205,64 +199,77 @@
 					</div>
 				</div>
 			</div>
+
+			<div class="squad-divider"></div>
+
+			<h3 class="squad-injuries-title">Estado del plantel</h3>
+			<div class="mp-injuries">
+				<div class="inj-row"><span class="inj-name">Cuti Romero</span><span class="inj-detail">Esguince ligamento colateral — llegaría en óptimas condiciones</span></div>
+				<div class="inj-row"><span class="inj-name">Leandro Paredes</span><span class="inj-detail">Molestia muscular — compromete su presencia</span></div>
+				<div class="inj-row"><span class="inj-name">Dibu Martínez</span><span class="inj-detail">Fractura dedo anular mano derecha</span></div>
+				<div class="inj-row"><span class="inj-name">Lionel Messi</span><span class="inj-detail">Molestia muscular crónica — convive con ella</span></div>
+				<div class="inj-row"><span class="inj-name">Molina / Montiel</span><span class="inj-detail">Lesiones musculares — hay alternativas</span></div>
+			</div>
+			<div class="squad-legend">Marcados en rojo: con molestias físicas</div>
 		</div>
 
-		<!-- Right: countdown to Argentina's match -->
-		<div class="countdown-arg">
-			<div class="arg-match-badge">
-				<span class="flag">🇦🇷</span>
-				<span class="arg-vs">Argentina vs Argelia</span>
-				<span class="flag">🇩🇿</span>
-			</div>
-			<div class="arg-eyebrow">Próximo partido de la Selección</div>
-			<div class="countdown-display">
-				<div class="cd-unit">
-					<div class="cd-num">{pad(arg.days)}</div>
-					<div class="cd-label">DÍAS</div>
-				</div>
-				<div class="cd-sep">:</div>
-				<div class="cd-unit">
-					<div class="cd-num">{pad(arg.hours)}</div>
-					<div class="cd-label">HORAS</div>
-				</div>
-				<div class="cd-sep">:</div>
-				<div class="cd-unit">
-					<div class="cd-num">{pad(arg.mins)}</div>
-					<div class="cd-label">MIN</div>
-				</div>
-				<div class="cd-sep blink">:</div>
-				<div class="cd-unit">
-					<div class="cd-num cd-secs">{pad(arg.secs)}</div>
-					<div class="cd-label">SEG</div>
-				</div>
-			</div>
-			<div class="arg-meta">
-				<span class="meta-tag">Grupo J</span>
-				12 Jun · 21:00 hs · AT&T Stadium, Dallas
-			</div>
-		</div>
+		<!-- Right: match info panel -->
+		<div class="match-panel">
 
-	</section>
-
-	<!-- ═══ EXPLORE ═══ -->
-	<section class="explore">
-		<div class="explore-header">
-			<div class="section-hero-label">El micrositio</div>
-			<h2 class="section-title">Explorá todo lo que ofrece Cíclico</h2>
-			<p class="section-subtitle">Seis secciones con datos, análisis y simulaciones del Mundial 2026.</p>
-		</div>
-		<div class="explore-grid">
-			{#each sections as s}
-				<a href={s.href} class="explore-card">
-					<div class="card-num">{s.num}</div>
-					<div class="card-body">
-						<div class="card-label">{s.label}</div>
-						<div class="card-desc">{s.desc}</div>
+			<!-- Ticket -->
+			<div class="ticket">
+				<div class="ticket-left">
+					<div class="ticket-teams">
+						<div class="ticket-team">ARGENTINA</div>
+						<div class="ticket-team">ARGELIA</div>
 					</div>
-					<div class="card-arrow">→</div>
-				</a>
-			{/each}
+					<div class="ticket-right">
+						<div class="ticket-detail">· MARTES 16 DE JUNIO</div>
+						<div class="ticket-detail">· 22:00 HS ARGENTINA</div>
+						<div class="ticket-detail">· ARROWHEAD STADIUM, KANSAS CITY</div>
+					</div>
+				</div>
+				<div class="ticket-cd-panel">
+					<div class="tcd-eyebrow">Cuenta regresiva · Grupo J</div>
+					<div class="ticket-cd">
+						<div class="tcd-unit"><div class="tcd-num mp-cd-sweep">{pad(arg.days)}</div><div class="tcd-lbl">DÍAS</div></div>
+						<div class="tcd-sep">:</div>
+						<div class="tcd-unit"><div class="tcd-num mp-cd-sweep">{pad(arg.hours)}</div><div class="tcd-lbl">HS</div></div>
+						<div class="tcd-sep">:</div>
+						<div class="tcd-unit"><div class="tcd-num mp-cd-sweep">{pad(arg.mins)}</div><div class="tcd-lbl">MIN</div></div>
+						<div class="tcd-sep">:</div>
+						<div class="tcd-unit"><div class="tcd-num mp-cd-sweep">{pad(arg.secs)}</div><div class="tcd-lbl">SEG</div></div>
+					</div>
+				</div>
+			</div>
+
+			<!-- Algeria -->
+			<div class="mp-block">
+				<h3 class="mp-section-title">¿Qué se espera del equipo argelino?</h3>
+				<p class="mp-text">No es un rival de relleno. Clasificó con 8 triunfos, 1 empate y 1 derrota. En 2014 llegó a octavos y puso en apuros a la Alemania campeona. Juega en 4-3-3 / 4-2-3-1, presión alta y ataque rápido por las bandas. DT: <strong>Vladimir Petković</strong> — conocido de Scaloni de la etapa en Lazio.</p>
+				<div class="mp-players">
+					<div class="mp-player"><span class="mp-pname">Riyad Mahrez</span><span class="mp-pinfo">35 años · Al-Ahli · ex Manchester City · Champions 2023</span></div>
+					<div class="mp-player"><span class="mp-pname">Rayan Aït-Nouri</span><span class="mp-pinfo">Lateral izq. titular en Manchester City</span></div>
+					<div class="mp-player"><span class="mp-pname">Ramy Bensebaini</span><span class="mp-pinfo">Defensor · Borussia Dortmund</span></div>
+					<div class="mp-player"><span class="mp-pname">Houssem Aouar</span><span class="mp-pinfo">Mediocampista · Al-Ittihad · ex Lyon y Roma</span></div>
+					<div class="mp-player"><span class="mp-pname">Luca Zidane</span><span class="mp-pinfo">Arquero · hijo de Zinedine · Granada · titular en CAN</span></div>
+				</div>
+			</div>
+
+			<!-- History & alert -->
+			<div class="mp-row-2">
+				<div class="mp-block mp-block-half">
+					<h3 class="mp-section-title mp-title-sm">Único antecedente</h3>
+					<p class="mp-text">Camp Nou, 2007. Amistoso pre Copa América. Argentina ganó <strong>4-3</strong> con doblete de Messi, más Tevez y Cambiasso. De ese equipo, solo Messi sigue; Ayala y Aimar hoy son parte del cuerpo técnico.</p>
+				</div>
+				<div class="mp-block mp-block-half mp-alert">
+					<h3 class="mp-section-title mp-title-sm">Tener presente</h3>
+					<p class="mp-text">Argelia vuelve al Mundial tras quedar fuera en 2022. La presión interna es alta. Tienen calidad real en Europa. El partido es ganable, pero presentarlos como decorativos sería un error de lectura.</p>
+				</div>
+			</div>
+
 		</div>
+
 	</section>
 
 	<!-- ═══ FOOTER ═══ -->
@@ -278,47 +285,6 @@
 <style>
 	.home { min-height: 100vh; }
 
-	/* ── OPENING STRIP ── */
-	.opening-strip {
-		display: flex;
-		align-items: center;
-		gap: 20px;
-		padding: 10px 32px;
-		background: #111111;
-		border-bottom: 1px solid rgba(255,255,255,0.08);
-		font-family: 'DM Mono', monospace;
-		font-size: 12px;
-		flex-wrap: wrap;
-	}
-	.strip-label {
-		color: var(--amarillo);
-		text-transform: uppercase;
-		letter-spacing: 0.12em;
-		font-size: 10px;
-		flex-shrink: 0;
-	}
-	.strip-match {
-		color: #ffffff;
-		font-weight: 500;
-		flex-shrink: 0;
-	}
-	.strip-cd {
-		display: flex;
-		align-items: baseline;
-		gap: 3px;
-		color: #ffffff;
-	}
-	.strip-num { font-size: 15px; font-weight: 600; letter-spacing: -0.02em; }
-	.strip-unit { font-size: 9px; color: rgba(255,255,255,0.45); margin-right: 2px; }
-	.strip-sep { color: rgba(255,255,255,0.3); font-size: 13px; }
-	.cd-secs { color: var(--celeste); }
-	.strip-venue {
-		color: rgba(255,255,255,0.4);
-		font-size: 11px;
-		margin-left: auto;
-		flex-shrink: 0;
-	}
-
 	/* ── HERO ── */
 	.hero {
 		position: relative;
@@ -329,24 +295,34 @@
 		padding: 60px 48px;
 	}
 
-	.video-bg {
+	.img-bg {
 		position: absolute;
 		inset: 0;
 		z-index: 0;
 	}
-	.video-bg video {
-		width: 100%;
-		height: 100%;
-		object-fit: cover;
+	.img-slide {
+		position: absolute;
+		inset: 0;
+		background-size: cover;
+		background-position: center;
+		opacity: 0;
+		animation: slideShow 25s infinite;
+	}
+	@keyframes slideShow {
+		0%    { opacity: 0; }
+		5%    { opacity: 1; }
+		20%   { opacity: 1; }
+		25%   { opacity: 0; }
+		100%  { opacity: 0; }
 	}
 	.video-overlay {
 		position: absolute;
 		inset: 0;
 		background: linear-gradient(
 			to right,
-			rgba(0,0,0,0.72) 0%,
-			rgba(0,0,0,0.5) 55%,
-			rgba(0,0,0,0.35) 100%
+			rgba(0,0,0,0.82) 0%,
+			rgba(0,0,0,0.65) 55%,
+			rgba(0,0,0,0.55) 100%
 		);
 	}
 
@@ -371,10 +347,10 @@
 
 	/* Left card */
 	.hero-card {
-		background: rgba(255,255,255,0.1);
+		background: rgba(0,0,0,0.45);
 		backdrop-filter: blur(20px);
 		-webkit-backdrop-filter: blur(20px);
-		border: 1px solid rgba(255,255,255,0.2);
+		border: 1px solid rgba(255,255,255,0.15);
 		border-radius: 20px;
 		padding: 48px 44px;
 		position: relative;
@@ -390,6 +366,18 @@
 		border-radius: 20px 20px 0 0;
 		pointer-events: none;
 	}
+
+	.hero-card-body {
+		display: flex;
+		align-items: center;
+		gap: 28px;
+	}
+	.hero-logo {
+		height: 110px;
+		width: auto;
+		flex-shrink: 0;
+	}
+	.hero-card-text { flex: 1; }
 
 	.hero-eyebrow {
 		font-family: 'Inter', monospace;
@@ -417,6 +405,91 @@
 		line-height: 1.7;
 	}
 
+	/* Right column */
+	.hero-right {
+		display: flex;
+		flex-direction: column;
+		gap: 12px;
+	}
+
+	/* Countdown card */
+	.hero-cd-card {
+		background: rgba(0,0,0,0.45);
+		backdrop-filter: blur(20px);
+		-webkit-backdrop-filter: blur(20px);
+		border: 1px solid rgba(255,255,255,0.15);
+		border-radius: 14px;
+		padding: 20px 24px;
+		position: relative;
+		overflow: hidden;
+		box-shadow: 0 2px 12px rgba(0,0,0,0.2), inset 0 1px 0 rgba(255,255,255,0.2);
+		display: flex;
+		align-items: center;
+		gap: 20px;
+		flex-wrap: wrap;
+	}
+	.hero-cd-card::before {
+		content: '';
+		position: absolute;
+		top: 0; left: 0; right: 0;
+		height: 50%;
+		background: linear-gradient(180deg, rgba(255,255,255,0.1) 0%, transparent 100%);
+		pointer-events: none;
+	}
+	.hcd-label {
+		font-family: 'Inter', monospace;
+		font-size: 10px;
+		letter-spacing: 0.14em;
+		text-transform: uppercase;
+		color: var(--amarillo);
+		flex-shrink: 0;
+	}
+	.hcd-match {
+		font-family: 'Inter', sans-serif;
+		font-size: 13px;
+		font-weight: 600;
+		color: #fff;
+		flex-shrink: 0;
+	}
+	.hcd-match span { margin: 0 4px; }
+	.hcd-timer {
+		display: flex;
+		align-items: baseline;
+		gap: 4px;
+		margin-left: auto;
+		flex-shrink: 0;
+	}
+	.hcd-unit { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+	.hcd-num {
+		font-family: 'DM Mono', monospace;
+		font-size: 22px;
+		font-weight: 700;
+		color: #fff;
+		line-height: 1;
+		letter-spacing: -0.02em;
+	}
+	.hcd-secs { color: var(--celeste); animation: secPulse 1s ease-in-out infinite; }
+	.hcd-lbl {
+		font-family: 'DM Mono', monospace;
+		font-size: 8px;
+		color: rgba(255,255,255,0.4);
+		letter-spacing: 0.1em;
+	}
+	.hcd-sep {
+		font-family: 'DM Mono', monospace;
+		font-size: 18px;
+		color: rgba(255,255,255,0.3);
+		padding-bottom: 10px;
+		line-height: 1;
+	}
+	.hcd-venue {
+		font-family: 'DM Mono', monospace;
+		font-size: 10px;
+		color: rgba(255,255,255,0.4);
+		width: 100%;
+		margin-top: -8px;
+	}
+
 	/* Right nav grid */
 	.hero-nav-grid {
 		display: grid;
@@ -425,10 +498,10 @@
 	}
 
 	.hero-nav-btn {
-		background: rgba(255,255,255,0.1);
+		background: rgba(0,0,0,0.4);
 		backdrop-filter: blur(16px);
 		-webkit-backdrop-filter: blur(16px);
-		border: 1px solid rgba(255,255,255,0.2);
+		border: 1px solid rgba(255,255,255,0.15);
 		border-radius: 14px;
 		padding: 18px 16px;
 		text-decoration: none;
@@ -479,19 +552,28 @@
 	/* ── ARGENTINA SECTION ── */
 	.arg-section {
 		display: grid;
-		grid-template-columns: 1fr 1fr;
+		grid-template-columns: 2fr 3fr;
 		gap: 0;
 		border-top: 1px solid var(--border);
 		border-bottom: 1px solid var(--border);
+		position: relative;
 	}
+	.arg-section::before {
+		content: '';
+		position: absolute;
+		inset: 0;
+		background: url('/fondo-seccion-argentina.jpg') center / cover no-repeat;
+		z-index: 0;
+	}
+	.arg-section > * { position: relative; z-index: 1; }
 
 	/* Squad panel */
 	.squad-panel {
-		padding: 56px 48px;
-		border-right: 1px solid var(--border);
-		background: rgba(255,255,255,0.45);
-		backdrop-filter: blur(12px);
-		-webkit-backdrop-filter: blur(12px);
+		padding: 48px 36px;
+		border-right: 1px solid rgba(255,255,255,0.12);
+		background: rgba(5,8,20,0.80);
+		backdrop-filter: blur(16px);
+		-webkit-backdrop-filter: blur(16px);
 	}
 
 	.squad-header {
@@ -511,10 +593,11 @@
 	}
 	.squad-title {
 		font-family: 'Inter', sans-serif;
-		font-size: 22px;
-		font-weight: 800;
-		letter-spacing: -0.02em;
-		color: var(--text);
+		font-size: 32px;
+		font-weight: 900;
+		letter-spacing: -0.03em;
+		color: #ffffff;
+		line-height: 1;
 	}
 
 	.squad-groups { display: flex; flex-direction: column; gap: 20px; }
@@ -525,11 +608,11 @@
 		font-size: 10px;
 		letter-spacing: 0.14em;
 		text-transform: uppercase;
-		color: var(--amarillo-dim);
+		color: var(--amarillo);
 		font-weight: 700;
 		margin-bottom: 8px;
 		padding-bottom: 6px;
-		border-bottom: 1px solid var(--border);
+		border-bottom: 1px solid rgba(255,255,255,0.1);
 	}
 	.squad-names {
 		display: flex;
@@ -538,59 +621,251 @@
 	}
 	.squad-names span {
 		font-family: 'Instrument Sans', sans-serif;
-		font-size: 13px;
-		color: var(--text);
-		background: rgba(255,255,255,0.6);
-		border: 1px solid var(--border);
+		font-size: 12px;
+		color: #ffffff;
+		background: rgba(91,155,213,0.2);
+		border: 1px solid rgba(91,155,213,0.35);
 		border-radius: 20px;
 		padding: 4px 12px;
 		backdrop-filter: blur(8px);
 	}
 	.squad-star {
-		background: rgba(245,194,0,0.12) !important;
+		background: rgba(245,194,0,0.15) !important;
 		border-color: rgba(245,194,0,0.4) !important;
-		color: #7a5c00 !important;
+		color: var(--amarillo) !important;
 		font-weight: 600;
 	}
+	.sq-injury {
+		border-color: rgba(255,100,100,0.35) !important;
+		color: rgba(255,160,160,0.9) !important;
+	}
+	.squad-divider {
+		height: 1px;
+		background: rgba(255,255,255,0.1);
+		margin: 28px 0 24px;
+	}
+	.squad-injuries-title {
+		font-family: 'Inter', sans-serif;
+		font-size: 18px;
+		font-weight: 800;
+		color: #ffffff;
+		letter-spacing: -0.02em;
+		margin-bottom: 14px;
+	}
+	.squad-legend {
+		margin-top: 16px;
+		font-family: 'DM Mono', monospace;
+		font-size: 10px;
+		color: rgba(255,160,160,0.5);
+		letter-spacing: 0.06em;
+	}
 
-	/* Countdown panel */
-	.countdown-arg {
-		padding: 56px 48px;
+	/* ── MATCH PANEL (right) ── */
+	.match-panel {
+		padding: 40px 44px;
+		display: flex;
+		flex-direction: column;
+		gap: 20px;
+		background: rgba(255,255,255,0.55);
+		backdrop-filter: blur(16px);
+		-webkit-backdrop-filter: blur(16px);
+	}
+
+	/* ── TICKET ── */
+	.ticket {
+		border-radius: 16px;
+		overflow: hidden;
+		border: 1px solid rgba(255,255,255,0.15);
+		box-shadow: 0 8px 32px rgba(0,0,0,0.25);
+		background: url('/fondo-card-partido-sin texto.png') center / cover no-repeat;
+		position: relative;
+		aspect-ratio: 1672 / 580;
+		display: grid;
+		grid-template-columns: 1fr;
+		grid-template-rows: 1fr auto;
+	}
+	.ticket::after {
+		content: '';
+		position: absolute;
+		inset: 0;
+		background: linear-gradient(to top, rgba(0,0,0,0.75) 0%, rgba(0,0,0,0.2) 45%, rgba(0,0,0,0) 65%);
+		pointer-events: none;
+	}
+
+	.ticket-left {
+		grid-column: 1; grid-row: 1;
+		display: flex;
+		flex-direction: row;
+		align-items: center;
+		justify-content: center;
+		gap: 48px;
+		padding: 20px 24px;
+		position: relative;
+		z-index: 2;
+	}
+	.ticket-teams {
+		display: flex;
+		flex-direction: column;
+	}
+	.ticket-team {
+		font-family: 'Inter', sans-serif;
+		font-size: 42px;
+		font-weight: 900;
+		color: #ffffff;
+		letter-spacing: -0.03em;
+		line-height: 0.8;
+		text-shadow: 0 2px 12px rgba(0,0,0,0.4);
+	}
+
+	.ticket-right {
+		display: flex;
+		flex-direction: column;
+		justify-content: center;
+		gap: 4px;
+	}
+	.ticket-detail {
+		font-family: 'Instrument Sans', sans-serif;
+		font-size: 11px;
+		font-weight: 500;
+		color: rgba(255,255,255,0.85);
+		line-height: 0.8rem;
+	}
+
+	.ticket-cd-panel {
+		grid-column: 1 / -1;
+		grid-row: 2;
+		position: relative;
+		z-index: 2;
+		padding: 0px 24px 16px;
 		display: flex;
 		flex-direction: column;
 		align-items: center;
-		justify-content: center;
-		gap: 18px;
+		gap: 0px;
 		text-align: center;
-		background: rgba(255,255,255,0.3);
-		backdrop-filter: blur(12px);
-		-webkit-backdrop-filter: blur(12px);
 	}
 
-	.arg-match-badge {
-		display: flex;
-		align-items: center;
-		gap: 14px;
-	}
-	.flag { font-size: 36px; line-height: 1; }
-	.arg-vs {
-		font-family: 'Inter', sans-serif;
-		font-size: 16px;
-		font-weight: 700;
-		color: var(--text);
-		padding: 5px 18px;
-		border: 1px solid var(--border);
-		border-radius: 24px;
-		background: var(--bg-card2);
-	}
-
-	.arg-eyebrow {
+	.tcd-eyebrow {
 		font-family: 'Inter', monospace;
-		font-size: 11px;
+		font-size: 10px;
 		letter-spacing: 0.18em;
 		text-transform: uppercase;
-		color: var(--celeste);
+		color: var(--amarillo);
 	}
+
+	.ticket-cd {
+		display: flex;
+		align-items: flex-end;
+		gap: 6px;
+	}
+	.tcd-unit { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+	.tcd-num {
+		font-family: 'DM Mono', monospace;
+		font-size: 36px;
+		font-weight: 700;
+		line-height: 1;
+		letter-spacing: -0.03em;
+	}
+	.tcd-lbl {
+		font-family: 'DM Mono', monospace;
+		font-size: 12px;
+		color: rgba(255,255,255,0.5);
+		letter-spacing: 0.1em;
+		text-transform: uppercase;
+	}
+	.tcd-sep {
+		font-family: 'DM Mono', monospace;
+		font-size: 26px;
+		color: rgba(255,255,255,0.25);
+		padding-bottom: 18px;
+		line-height: 1;
+	}
+	.tcd-meta {
+		font-family: 'Instrument Sans', sans-serif;
+		font-size: 13px;
+		font-weight: 500;
+		color: rgba(255,255,255,0.6);
+	}
+
+	.mp-cd-sweep {
+		background: linear-gradient(90deg,
+			rgba(255,255,255,0.5) 0%,
+			rgba(255,255,255,1) 45%,
+			rgba(255,255,255,0.5) 100%
+		);
+		background-size: 200% 100%;
+		-webkit-background-clip: text;
+		background-clip: text;
+		-webkit-text-fill-color: transparent;
+		animation: sweepLight 3s ease-in-out infinite;
+	}
+	@keyframes sweepLight {
+		0%   { background-position: -100% 0; }
+		60%  { background-position: 200% 0; }
+		100% { background-position: 200% 0; }
+	}
+
+	.mp-block {
+		background: rgba(255,255,255,0.65);
+		border: 1px solid rgba(255,255,255,0.85);
+		border-radius: 12px;
+		padding: 22px 24px;
+		position: relative;
+		overflow: hidden;
+		box-shadow: inset 0 1px 0 rgba(255,255,255,0.95);
+	}
+	.mp-section-title {
+		font-family: 'Inter', sans-serif;
+		font-size: 22px;
+		font-weight: 900;
+		letter-spacing: -0.02em;
+		color: var(--text);
+		margin-bottom: 14px;
+		line-height: 1.1;
+	}
+	.mp-title-sm { font-size: 17px; }
+	.mp-text {
+		font-size: 14px;
+		color: var(--text);
+		line-height: 1.7;
+	}
+
+	.mp-injuries { display: flex; flex-direction: column; gap: 6px; }
+	.inj-row {
+		display: flex;
+		gap: 10px;
+		align-items: baseline;
+		font-size: 13px;
+	}
+	.inj-name {
+		font-family: 'Inter', sans-serif;
+		font-weight: 700;
+		color: #ffffff;
+		white-space: nowrap;
+		min-width: 130px;
+	}
+	.inj-detail { color: rgba(255,255,255,0.55); line-height: 1.5; font-size: 12px; }
+
+	.mp-players { display: flex; flex-direction: column; gap: 6px; margin-top: 12px; }
+	.mp-player {
+		display: flex;
+		gap: 10px;
+		align-items: baseline;
+		font-size: 13px;
+		padding: 6px 10px;
+		background: rgba(91,155,213,0.06);
+		border-radius: 8px;
+		border-left: 2px solid var(--celeste);
+	}
+	.mp-pname { font-weight: 700; color: var(--text); white-space: nowrap; }
+	.mp-pinfo { color: var(--muted); font-size: 12px; }
+
+	.mp-row-2 {
+		display: grid;
+		grid-template-columns: 1fr 1fr;
+		gap: 14px;
+	}
+	.mp-alert { border-color: rgba(245,194,0,0.4) !important; }
+	.mp-alert .mp-block-title { color: var(--amarillo-dim); }
 
 	.countdown-display {
 		display: flex;
@@ -782,9 +1057,13 @@
 		.hero-grid { grid-template-columns: 1fr; }
 		.hero { padding: 48px 24px; min-height: auto; }
 		.hero-nav-grid { grid-template-columns: repeat(3, 1fr); }
+		.hcd-timer { margin-left: 0; }
 		.arg-section { grid-template-columns: 1fr; }
-		.squad-panel { border-right: none; border-bottom: 1px solid var(--border); padding: 40px 24px; }
-		.countdown-arg { padding: 40px 24px; }
+		.squad-panel { border-right: none; border-bottom: 1px solid rgba(255,255,255,0.1); padding: 36px 24px; }
+		.match-panel { padding: 32px 24px; }
+		.mp-row-2 { grid-template-columns: 1fr; }
+		.mp-countdown { flex-direction: column; align-items: flex-start; }
+		.mp-cd-timer { margin-top: 8px; }
 	}
 	@media (max-width: 900px) {
 		.explore-grid { grid-template-columns: repeat(2, 1fr); }
