@@ -10,12 +10,22 @@ export interface Country {
 	politico: string;
 	pobreza: number;
 	gini: number;
+	deuda: number;
 	pisa: number;
 	aprobacion: number;
 	prensa: number;
 	pib: number;
+	gasto: number;
+	mcdonalds: number;
 	cerveza: number;
+	obesidad: number;
+	vacaciones: number;
+	sueno: number;
 	feriados: number;
+	felicidad: number;
+	frecuencia: number;
+	pornhub: number;
+	preservativos: number;
 }
 
 export interface Match {
@@ -35,6 +45,7 @@ export interface Variable {
 	dir: 'asc' | 'desc';
 	unit: string;
 	desc: string;
+	source?: string;
 	locked?: boolean;
 }
 
