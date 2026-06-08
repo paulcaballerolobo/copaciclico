@@ -1,0 +1,74 @@
+<h2>Proposed SvelteKit File Structure</h2>
+<p class="subtitle">How the single <code>index.html</code> maps to the new project layout</p>
+
+<div class="section">
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;align-items:start;">
+
+    <!-- BEFORE -->
+    <div>
+      <div class="label" style="margin-bottom:12px;">Before — 1 file</div>
+      <div style="background:#1a1a2e;border:1px solid #2a2a4a;border-radius:10px;padding:20px;font-family:monospace;font-size:13px;line-height:2;">
+        <span style="color:#888;">Paul-demo/</span><br>
+        <span style="color:#FF5500;padding-left:20px;">└── index.html</span> <span style="color:#555;font-size:11px;">← everything</span>
+      </div>
+    </div>
+
+    <!-- AFTER -->
+    <div>
+      <div class="label" style="margin-bottom:12px;">After — SvelteKit</div>
+      <div style="background:#1a1a2e;border:1px solid #2a2a4a;border-radius:10px;padding:20px;font-family:monospace;font-size:12px;line-height:1.9;">
+        <span style="color:#888;">src/</span><br>
+
+        <span style="color:#888;padding-left:16px;">├── lib/</span><br>
+        <span style="color:#3ECF8E;padding-left:32px;">│   ├── data.ts</span> <span style="color:#555;font-size:10px;">← COUNTRIES, GROUPS, MATCHES…</span><br>
+        <span style="color:#3ECF8E;padding-left:32px;">│   ├── types.ts</span> <span style="color:#555;font-size:10px;">← Country, Match, Variable…</span><br>
+        <span style="color:#3ECF8E;padding-left:32px;">│   └── stores.ts</span> <span style="color:#555;font-size:10px;">← currentVar, fixtureResults</span><br>
+
+        <span style="color:#888;padding-left:16px;">├── routes/</span><br>
+        <span style="color:#FF9966;padding-left:32px;">│   ├── +layout.svelte</span> <span style="color:#555;font-size:10px;">← nav bar</span><br>
+        <span style="color:#FF9966;padding-left:32px;">│   ├── +page.svelte</span> <span style="color:#555;font-size:10px;">← redirects to /datos</span><br>
+
+        <span style="color:#888;padding-left:32px;">│   ├── datos/</span><br>
+        <span style="color:#FF9966;padding-left:48px;">│   │   └── +page.svelte</span> <span style="color:#555;font-size:10px;">← Mundial de Datos</span><br>
+        <span style="color:#888;padding-left:32px;">│   ├── fixture/</span><br>
+        <span style="color:#FF9966;padding-left:48px;">│   │   └── +page.svelte</span> <span style="color:#555;font-size:10px;">← Simulador</span><br>
+        <span style="color:#888;padding-left:32px;">│   ├── paises/</span><br>
+        <span style="color:#FF9966;padding-left:48px;">│   │   └── +page.svelte</span> <span style="color:#555;font-size:10px;">← Países</span><br>
+        <span style="color:#888;padding-left:32px;">│   ├── calendario/</span><br>
+        <span style="color:#FF9966;padding-left:48px;">│   │   └── +page.svelte</span> <span style="color:#555;font-size:10px;">← Calendario + Countdown</span><br>
+        <span style="color:#888;padding-left:32px;">│   ├── ciudades/</span><br>
+        <span style="color:#FF9966;padding-left:48px;">│   │   └── +page.svelte</span> <span style="color:#555;font-size:10px;">← Ciudades sede</span><br>
+        <span style="color:#888;padding-left:32px;">│   └── stats/</span><br>
+        <span style="color:#FF9966;padding-left:48px;">│       └── +page.svelte</span> <span style="color:#555;font-size:10px;">← Estadísticas</span><br>
+
+        <span style="color:#888;padding-left:16px;">└── app.html</span> <span style="color:#555;font-size:10px;">← Google Fonts, meta tags</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <div class="label" style="margin-bottom:12px;">What lives where</div>
+  <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;">
+    <div style="background:#1a1a2e;border:1px solid #2a2a4a;border-radius:8px;padding:16px;">
+      <div style="color:#3ECF8E;font-size:12px;font-weight:700;margin-bottom:8px;text-transform:uppercase;letter-spacing:.08em;">lib/data.ts</div>
+      <div style="font-size:12px;color:#aaa;line-height:1.6;">All <code>const</code> data from the current script block. Typed with interfaces from <code>types.ts</code>. Exported and imported by page components.</div>
+    </div>
+    <div style="background:#1a1a2e;border:1px solid #2a2a4a;border-radius:8px;padding:16px;">
+      <div style="color:#3ECF8E;font-size:12px;font-weight:700;margin-bottom:8px;text-transform:uppercase;letter-spacing:.08em;">lib/stores.ts</div>
+      <div style="font-size:12px;color:#aaa;line-height:1.6;">Two writable stores: <code>currentVar</code> (selected metric) and <code>fixtureResults</code> (match picks). Persist across route navigations.</div>
+    </div>
+    <div style="background:#1a1a2e;border:1px solid #2a2a4a;border-radius:8px;padding:16px;">
+      <div style="color:#FF9966;font-size:12px;font-weight:700;margin-bottom:8px;text-transform:uppercase;letter-spacing:.08em;">routes/+layout.svelte</div>
+      <div style="font-size:12px;color:#aaa;line-height:1.6;">The sticky nav bar. Uses SvelteKit's <code>$page.url.pathname</code> to highlight the active tab. Zero JS needed for routing.</div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <div class="label" style="margin-bottom:12px;">CSS strategy</div>
+  <div style="background:#1a1a2e;border:1px solid #2a2a4a;border-radius:8px;padding:16px;font-size:13px;color:#ccc;line-height:1.7;">
+    Global styles (<code>:root</code> vars, resets, shared classes like <code>.mono</code>, <code>.card</code>) go into <code>app.html</code> or a <code>src/app.css</code> imported in the layout.
+    Component-specific styles (e.g., <code>.group-card</code>) stay in each <code>+page.svelte</code> as <code>&lt;style&gt;</code> blocks — Svelte scopes them automatically, no class-name collisions.
+  </div>
+</div>
