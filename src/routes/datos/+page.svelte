@@ -2,7 +2,7 @@
 	import { currentVar } from '$lib/stores';
 	import { COUNTRIES, GROUPS, VARIABLES, EDITORIAL, getMetric } from '$lib/data';
 	import type { Variable } from '$lib/types';
-	import { fly } from 'svelte/transition';
+	import { fly, fade } from 'svelte/transition';
 
 	function getVarConfig(varId: string): Variable | null {
 		for (const cat of VARIABLES.cats) {
@@ -77,20 +77,20 @@
 	</div>
 
 	<!-- Group rankings -->
-	{#key $currentVar}
-		<div class="groups-grid" in:fly={{ y: 8, duration: 200 }}>
-			{#each Object.entries(GROUPS) as [gk]}
-				{@const ranked = rankGroup(gk, $currentVar)}
-				<div class="group-card">
-					<div class="group-card-header">
-						<span class="group-label">GRUPO {gk}</span>
-						<span class="group-unit">{varCfg?.unit ?? ''}</span>
-					</div>
+	<div class="groups-grid">
+		{#each Object.entries(GROUPS) as [gk], gi}
+			{@const ranked = rankGroup(gk, $currentVar)}
+			<div class="group-card">
+				<div class="group-card-header">
+					<span class="group-label">GRUPO {gk}</span>
+					<span class="group-unit">{varCfg?.unit ?? ''}</span>
+				</div>
+				{#key $currentVar}
 					<div class="group-rows">
 						{#each ranked as code, idx}
 							{@const c = COUNTRIES[code]}
 							{@const val = getMetric(c, $currentVar)}
-							<div class="country-row">
+							<div class="country-row" style="--row-delay: {100 + (3 - idx) * 300}ms">
 								<span class="pos-num" class:gold={idx === 0} class:silver={idx === 1}>{idx + 1}</span>
 								<span class="country-flag">{c.flag}</span>
 								<div class="country-name-row">
@@ -103,10 +103,10 @@
 							</div>
 						{/each}
 					</div>
-				</div>
-			{/each}
-		</div>
-	{/key}
+				{/key}
+			</div>
+		{/each}
+	</div>
 
 	<!-- Editorial note -->
 	<div class="editorial-note">
@@ -146,16 +146,24 @@
 	.var-btn.locked:hover { border-color: var(--border); color: var(--muted); }
 
 	.groups-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-top: 24px; }
-	.group-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+	.group-card { background: rgba(255,255,255,0.92); border: 1px solid rgba(255,255,255,0.9); border-radius: 12px; box-shadow: 0 2px 12px rgba(0,0,0,0.06); }
 	.group-card-header {
-		background: var(--bg-card2); padding: 12px 16px;
-		border-bottom: 1px solid var(--border);
+		background: rgba(91,155,213,0.1); padding: 12px 16px;
+		border-bottom: 1px solid rgba(0,0,0,0.06);
 		display: flex; align-items: center; justify-content: space-between; gap: 8px;
 	}
 	.group-label { font-family: 'Inter', monospace; font-size: 10px; letter-spacing: 0.15em; text-transform: uppercase; color: var(--celeste); }
 	.group-unit { font-family: 'Inter', monospace; font-size: 11px; color: var(--muted); }
 
-	.country-row { display: flex; align-items: center; gap: 10px; padding: 12px 16px; border-bottom: 1px solid var(--border); }
+	@keyframes rowIn {
+		from { opacity: 0; transform: translateY(14px); }
+		to   { opacity: 1; transform: translateY(0); }
+	}
+	.country-row {
+		display: flex; align-items: center; gap: 10px; padding: 12px 16px; border-bottom: 1px solid var(--border);
+		animation: rowIn 550ms ease both;
+		animation-delay: var(--row-delay, 0ms);
+	}
 	.country-row:last-child { border-bottom: none; }
 	.pos-num { font-family: 'Inter', monospace; font-size: 11px; color: var(--muted); width: 16px; flex-shrink: 0; }
 	.pos-num.gold { color: var(--celeste); }
@@ -164,8 +172,8 @@
 	.country-name-row { flex: 1; min-width: 0; }
 	.country-name-text { font-family: 'Inter', sans-serif; font-size: 13px; font-weight: 800; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 	.country-value { font-family: 'Inter', monospace; font-size: 12px; color: var(--celeste); flex-shrink: 0; text-align: right; }
-	.country-bar { height: 3px; background: var(--border); border-radius: 2px; margin-top: 4px; }
-	.country-bar-fill { height: 100%; background: var(--celeste); border-radius: 2px; transition: width 0.8s cubic-bezier(0.4, 0, 0.2, 1); }
+	.country-bar { height: 5px; background: rgba(0,0,0,0.08); border-radius: 3px; margin-top: 5px; }
+	.country-bar-fill { height: 100%; background: var(--celeste); border-radius: 3px; transition: width 0.9s cubic-bezier(0.4, 0, 0.2, 1); }
 
 	.editorial-note {
 		background: var(--bg-card); border-left: 3px solid var(--celeste);
