@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
+	import { onMount, onDestroy } from 'svelte';
 	import { supabase } from '$lib/supabase';
 	import { getSession, type MundialUser } from '$lib/mundial/auth';
 	import { formatDateAR, generateCode, flag } from '$lib/mundial/utils';
@@ -25,6 +25,7 @@
 		penalties_home: number | null;
 		penalties_away: number | null;
 		predictions_open: boolean;
+		predictions_status?: 'waiting' | 'open' | 'closed';
 		confirmed_by_admin: boolean;
 	}
 
@@ -90,6 +91,11 @@
 	let savingConfig = false;
 	let modeConfirmDialog = false;
 	let modeTargetReal = false;
+	let triggeringAnimation = false;
+	let broadcastChannel: ReturnType<typeof supabase.channel> | null = null;
+
+	// Confirmación cierre de pronósticos
+	let closePredsMatch: Match | null = null;
 
 	// Resultado de partido
 	let resultForms: Record<string, { home: string; away: string; winner: string; penalties: boolean; extraTime: boolean; etHome: string; etAway: string; penHome: string; penAway: string; saving: boolean }> = {};
@@ -99,6 +105,7 @@
 	let matchPredictions: Record<string, { user_id: string; predicted_winner: string; predicted_home: number | null; predicted_away: number | null; has_exact_score: boolean; entered_by?: string }[]> = {};
 	let predForms: Record<string, Record<string, { winner: string; scoreHome: string; scoreAway: string; saving: boolean }>> = {};
 	let predCounts: Record<string, number> = {};
+	let editingPreds: Record<string, Set<string>> = {}; // matchId → Set<playerId>
 
 	// Filtro de semana
 	let selectedWeek = 1;
@@ -140,8 +147,13 @@
 		}
 		user = session;
 		isAdmin = true;
+		broadcastChannel = supabase.channel('prode-broadcast').subscribe();
 		await loadAll();
 		loading = false;
+	});
+
+	onDestroy(() => {
+		if (broadcastChannel) supabase.removeChannel(broadcastChannel);
 	});
 
 	// ─── CARGA ───────────────────────────────────────────────────
@@ -213,10 +225,12 @@
 	async function confirmSetReal() {
 		modeConfirmDialog = false;
 		savingConfig = true;
-		// Llamar a clear-rehearsal-data (por ahora directo con service_role si está disponible)
-		// Como estamos en frontend, hacemos lo que podemos con anon key
+		// Borrar todos los datos de ensayo
 		await supabase.from('predictions').delete().eq('is_rehearsal', true);
 		await supabase.from('trivia_sessions').delete().eq('is_rehearsal', true);
+		// Resetear puntos y ranking de todos los jugadores a cero
+		await supabase.from('users').update({ points_total: 0, ranking_position: null })
+			.eq('is_active', true).eq('is_admin', false);
 		await updateConfig('is_rehearsal_mode', 'false');
 		isRehearsalMode = false;
 		savingConfig = false;
@@ -228,11 +242,20 @@
 	}
 
 	// ─── PARTIDOS ─────────────────────────────────────────────────
-	async function togglePredictionsOpen(match: Match) {
-		const newVal = !match.predictions_open;
-		await supabase.from('matches').update({ predictions_open: newVal }).eq('id', match.id);
-		match.predictions_open = newVal;
-		matches = [...matches];
+	async function setPredictionsStatus(match: Match, status: 'waiting' | 'open' | 'closed') {
+		const isOpen = status === 'open';
+		const { error } = await supabase.from('matches')
+			.update({ predictions_open: isOpen, predictions_status: status })
+			.eq('id', match.id);
+		if (error) {
+			await supabase.from('matches').update({ predictions_open: isOpen }).eq('id', match.id);
+		}
+		await loadMatches();
+	}
+
+	function getPredStatus(match: Match): 'waiting' | 'open' | 'closed' {
+		if (match.predictions_status) return match.predictions_status;
+		return match.predictions_open ? 'open' : 'waiting';
 	}
 
 	async function toggleLive(match: Match) {
@@ -289,9 +312,9 @@
 		winner: string, wentToPenalties: boolean, phase: string
 	) {
 		const BASE_POINTS: Record<string, number> = {
-			groups: 10, r32: 20, r16: 40, qf: 80, sf: 150, '3rd': 80, final: 200
+			groups: 100, r32: 200, r16: 400, qf: 800, sf: 1500, '3rd': 800, final: 2000
 		};
-		const base = BASE_POINTS[phase] ?? 10;
+		const base = BASE_POINTS[phase] ?? 100;
 
 		const { data: preds } = await supabase
 			.from('predictions')
@@ -308,8 +331,8 @@
 
 			let points = 0;
 			if (isCorrect) points += base;
-			if (exactScoreCorrect) points += Math.round(base * 0.5);
-			if (exactScoreWrong) points -= Math.round(base * 0.5);
+			if (exactScoreCorrect) points += Math.round(base * 0.7);
+			if (exactScoreWrong) points -= Math.round(base * 0.4);
 
 			await supabase.from('predictions').update({
 				is_correct: isCorrect,
@@ -328,6 +351,19 @@
 		await recalculateRankings();
 	}
 
+	async function triggerLiveAnimation() {
+		if (triggeringAnimation) return;
+		triggeringAnimation = true;
+		await recalculateRankings();
+		// Broadcast por el canal ya suscrito
+		await broadcastChannel?.send({
+			type: 'broadcast',
+			event: 'animate_ranking',
+			payload: {}
+		});
+		triggeringAnimation = false;
+	}
+
 	async function recalculateRankings() {
 		const { data: allUsers } = await supabase
 			.from('users')
@@ -340,9 +376,6 @@
 		for (let i = 0; i < allUsers.length; i++) {
 			await supabase.from('users').update({ ranking_position: i + 1 }).eq('id', allUsers[i].id);
 		}
-
-		// Disparar animación en TV
-		await supabase.from('tv_state').update({ trigger_animation: true, updated_at: new Date().toISOString() }).eq('id', 1);
 	}
 
 	async function addMatch() {
@@ -410,10 +443,9 @@
 	async function loadPreds(matchId: string) {
 		const { data } = await supabase
 			.from('predictions')
-			.select('user_id, predicted_winner, predicted_home, predicted_away, has_exact_score')
+			.select('user_id, predicted_winner, predicted_home, predicted_away, has_exact_score, entered_by')
 			.eq('match_id', matchId);
-		matchPredictions[matchId] = data ?? [];
-		matchPredictions = { ...matchPredictions };
+		matchPredictions = { ...matchPredictions, [matchId]: data ?? [] };
 
 		// Inicializar formularios para jugadores sin pronóstico
 		const nonAdminPlayers = players.filter(p => !p.is_admin && p.is_active);
@@ -450,6 +482,25 @@
 
 		const predictedWinner = winnerValue(form.winner, match);
 		const hasExact = form.scoreHome !== '' && form.scoreAway !== '';
+
+		// Validar coherencia marcador-ganador
+		if (hasExact) {
+			const h = parseInt(String(form.scoreHome));
+			const a = parseInt(String(form.scoreAway));
+			if (predictedWinner === 'home' && h <= a) {
+				alert(`El marcador no coincide con el ganador marcado (${match.team_home}). Revisá los goles.`);
+				form.saving = false; predForms = { ...predForms }; return;
+			}
+			if (predictedWinner === 'away' && a <= h) {
+				alert(`El marcador no coincide con el ganador marcado (${match.team_away}). Revisá los goles.`);
+				form.saving = false; predForms = { ...predForms }; return;
+			}
+			if (predictedWinner === 'draw' && h !== a) {
+				alert('El marcador no coincide con Empate. Los goles tienen que ser iguales.');
+				form.saving = false; predForms = { ...predForms }; return;
+			}
+		}
+
 		const payload: Record<string, unknown> = {
 			user_id: playerId,
 			match_id: match.id,
@@ -463,15 +514,57 @@
 			payload.predicted_away = parseInt(form.scoreAway);
 		}
 
-		const { error } = await supabase.from('predictions').insert(payload);
-		if (error) { alert('Error: ' + error.message); }
+		const { error } = await supabase
+			.from('predictions')
+			.upsert(payload, { onConflict: 'user_id,match_id' });
+		if (error) { alert('Error: ' + error.message); form.saving = false; predForms = { ...predForms }; return; }
 		form.saving = false;
+		// Cerrar modo edición si estaba activo
+		if (editingPreds[match.id]?.has(playerId)) {
+			editingPreds[match.id].delete(playerId);
+			editingPreds = { ...editingPreds };
+		}
 		await loadPreds(match.id);
+		await loadPredCounts();
+	}
+
+	function startEditPred(matchId: string, playerId: string, pred: { predicted_winner: string; predicted_home: number | null; predicted_away: number | null; has_exact_score: boolean }, match: Match) {
+		if (!confirm('¿Querés editar este pronóstico?')) return;
+		// Pre-cargar el form con los valores actuales
+		const winnerLabel = pred.predicted_winner === 'home' ? match.team_home
+			: pred.predicted_winner === 'away' ? match.team_away : 'draw';
+		predForms = {
+			...predForms,
+			[matchId]: {
+				...predForms[matchId],
+				[playerId]: {
+					winner: winnerLabel,
+					scoreHome: pred.predicted_home !== null ? String(pred.predicted_home) : '',
+					scoreAway: pred.predicted_away !== null ? String(pred.predicted_away) : '',
+					saving: false
+				}
+			}
+		};
+		if (!editingPreds[matchId]) editingPreds[matchId] = new Set();
+		editingPreds[matchId].add(playerId);
+		editingPreds = { ...editingPreds };
 	}
 
 	function isPredClosed(match: Match): boolean {
+		if (getPredStatus(match) === 'closed') return true;
 		const kickoff = new Date(match.kickoff_time).getTime();
 		return Date.now() >= kickoff - 3600 * 1000 || match.status === 'finished';
+	}
+
+	function setPredWinner(matchId: string, playerId: string, winner: string) {
+		if (!predForms[matchId]?.[playerId]) return;
+		predForms = {
+			...predForms,
+			[matchId]: {
+				...predForms[matchId],
+				[playerId]: { ...predForms[matchId][playerId], winner }
+			}
+		};
 	}
 
 	// ─── JUGADORES ────────────────────────────────────────────────
@@ -674,6 +767,14 @@
 				>
 					REAL
 				</button>
+				<button
+					class="admin-live-btn"
+					class:firing={triggeringAnimation}
+					disabled={triggeringAnimation}
+					on:click={triggerLiveAnimation}
+				>
+					{triggeringAnimation ? '⏳' : '🎬 Reajustar'}
+				</button>
 			</div>
 		</section>
 
@@ -686,6 +787,21 @@
 					<div class="admin-dialog-actions">
 						<button class="prode-btn-secondary" on:click={() => modeConfirmDialog = false}>Cancelar</button>
 						<button class="admin-btn-danger" on:click={confirmSetReal}>Sí, pasar a REAL</button>
+					</div>
+				</div>
+			</div>
+		{/if}
+
+		<!-- Confirm cierre de pronósticos -->
+		{#if closePredsMatch}
+			<div class="admin-overlay">
+				<div class="admin-dialog card">
+					<h3>⚠️ Cerrar pronósticos</h3>
+					<p>Esta acción cerrará los pronósticos de <strong>{closePredsMatch.team_home} vs {closePredsMatch.team_away}</strong>. Nadie podrá editarlos ni agregar nuevos. Esta acción no se puede revertir.</p>
+					<p>¿Estás seguro?</p>
+					<div class="admin-dialog-actions">
+						<button class="prode-btn-secondary" on:click={() => closePredsMatch = null}>No</button>
+						<button class="admin-btn-danger" on:click={async () => { await setPredictionsStatus(closePredsMatch!, 'closed'); closePredsMatch = null; }}>Sí, cerrar</button>
 					</div>
 				</div>
 			</div>
@@ -787,7 +903,7 @@
 
 				<!-- ── SEMANA ACTIVA ── -->
 				{:else}
-					{#each matchesByWeek(selectedWeek) as match}
+					{#each matches.filter(m => m.week_number === selectedWeek) as match}
 						{@const form = resultForms[match.id]}
 						<div class="amc">
 
@@ -820,9 +936,9 @@
 									{#if match.status === 'finished'}
 										<span class="amc-score-final">{match.result_home} — {match.result_away}</span>
 									{:else if form}
-										<input class="amc-score-inp" type="number" min="0" bind:value={form.home} placeholder="0" />
+										<input class="amc-score-inp" type="number" min="0" bind:value={form.home} placeholder="—" />
 										<span class="amc-score-sep">—</span>
-										<input class="amc-score-inp" type="number" min="0" bind:value={form.away} placeholder="0" />
+										<input class="amc-score-inp" type="number" min="0" bind:value={form.away} placeholder="—" />
 									{/if}
 								</div>
 								<div class="amc-team amc-team-r">
@@ -834,51 +950,59 @@
 							<!-- Controles -->
 							{#if match.status !== 'finished' && form}
 								<div class="amc-controls">
-									<label class="amc-switch">
-										<input type="checkbox" checked={match.predictions_open} on:change={() => togglePredictionsOpen(match)} />
-										<span class="amc-switch-lbl" class:open={match.predictions_open}>
-											{match.predictions_open ? '🟢 Pronósticos abiertos' : '🔴 Pronósticos cerrados'}
-										</span>
-									</label>
+									<div class="amc-tri-switch">
+										<button class="amc-tri-btn" class:active={getPredStatus(match) === 'waiting'}
+											on:click={() => setPredictionsStatus(match, 'waiting')}>
+											🟡 En espera
+										</button>
+										<button class="amc-tri-btn" class:active={getPredStatus(match) === 'open'}
+											on:click={() => setPredictionsStatus(match, 'open')}>
+											🟢 Abierto
+										</button>
+										<button class="amc-tri-btn" class:active={getPredStatus(match) === 'closed'}
+											on:click={() => { if (getPredStatus(match) !== 'closed') closePredsMatch = match; }}>
+											🔴 Cerrado
+										</button>
+									</div>
 				{#if match.phase !== 'groups'}
 										<select class="amc-winner-sel" bind:value={form.winner}>
 											<option value="">Ganador...</option>
 											<option value="home">{match.team_home}</option>
 											<option value="away">{match.team_away}</option>
 										</select>
+									{/if}
+									<label class="amc-switch">
+										<input type="checkbox" bind:checked={form.extraTime} on:change={() => { if (!form.extraTime) form.penalties = false; resultForms = {...resultForms}; }} />
+										<span class="amc-switch-lbl">Prórroga</span>
+									</label>
+									{#if form.extraTime}
+										<div class="amc-et-row">
+											<span class="amc-et-lbl">Prórr.</span>
+											<input class="amc-et-input" type="number" min="0" max="20" placeholder="—" bind:value={form.etHome} />
+											<span>-</span>
+											<input class="amc-et-input" type="number" min="0" max="20" placeholder="—" bind:value={form.etAway} />
+										</div>
 										<label class="amc-switch">
-											<input type="checkbox" bind:checked={form.extraTime} on:change={() => { if (!form.extraTime) form.penalties = false; resultForms = {...resultForms}; }} />
-											<span class="amc-switch-lbl">Prórroga</span>
+											<input type="checkbox" bind:checked={form.penalties} on:change={() => { resultForms = {...resultForms}; }} />
+											<span class="amc-switch-lbl">Penales</span>
 										</label>
-										{#if form.extraTime}
+										{#if form.penalties}
 											<div class="amc-et-row">
-												<span class="amc-et-lbl">Prórr.</span>
-												<input class="amc-et-input" type="number" min="0" max="20" placeholder="—" bind:value={form.etHome} />
+												<span class="amc-et-lbl">Pen.</span>
+												<input class="amc-et-input" type="number" min="0" max="30" placeholder="—" bind:value={form.penHome} />
 												<span>-</span>
-												<input class="amc-et-input" type="number" min="0" max="20" placeholder="—" bind:value={form.etAway} />
+												<input class="amc-et-input" type="number" min="0" max="30" placeholder="—" bind:value={form.penAway} />
 											</div>
-											<label class="amc-switch">
-												<input type="checkbox" bind:checked={form.penalties} />
-												<span class="amc-switch-lbl">Penales</span>
-											</label>
-											{#if form.penalties}
-												<div class="amc-et-row">
-													<span class="amc-et-lbl">Pen.</span>
-													<input class="amc-et-input" type="number" min="0" max="30" placeholder="—" bind:value={form.penHome} />
-													<span>-</span>
-													<input class="amc-et-input" type="number" min="0" max="30" placeholder="—" bind:value={form.penAway} />
-												</div>
-											{/if}
 										{/if}
 									{/if}
-									<button class="amc-confirm-btn" disabled={form.saving} on:click={() => {
+									<button class="amc-confirm-btn" class:confirmed={match.confirmed_by_admin} disabled={form.saving || match.confirmed_by_admin} on:click={() => {
 										if (match.phase === 'groups') {
 											const h = parseInt(form.home), a = parseInt(form.away);
 											if (!isNaN(h) && !isNaN(a)) form.winner = h > a ? 'home' : a > h ? 'away' : 'draw';
 										}
 										confirmResult(match);
 									}}>
-										{form.saving ? '...' : '✔ Confirmar resultado'}
+										{form.saving ? '...' : match.confirmed_by_admin ? '✔ Confirmado' : '✔ Confirmar resultado'}
 									</button>
 								</div>
 							{:else if match.status === 'finished'}
@@ -901,51 +1025,70 @@
 								<div class="amc-preds-panel">
 									<div class="amc-preds-grid">
 										{#each activePlayers as player}
-											{@const pred = predForPlayer(match.id, player.id)}
+											{@const pred = matchPredictions[match.id]?.find(p => p.user_id === player.id) ?? null}
 											{@const pform = predForms[match.id]?.[player.id]}
 											{@const closed = isPredClosed(match)}
-											<div class="amc-prow" class:has-pred={!!pred}>
+											{@const isEditing = editingPreds[match.id]?.has(player.id) ?? false}
+											{@const isMissed = closed && !pred && getPredStatus(match) === 'closed'}
+											<div class="amc-prow" class:has-pred={!!pred && !isEditing} class:is-missed={isMissed}>
 												<span class="amc-prow-name">{player.full_name}</span>
-												{#if pred}
+												{#if isMissed}
+													<span class="amc-missed-lbl">sin pronóstico</span>
+												{:else if pred && !isEditing}
 													<div class="amc-prow-result">
-														<span class="amc-winner-pill">{winnerLabel(pred, match)}</span>
-														{#if pred.has_exact_score}
-															<span class="amc-score-pill">{pred.predicted_home}-{pred.predicted_away}</span>
-														{/if}
-														<span class="amc-by-pill" class:by-admin={pred.entered_by === 'admin'}>
-															{pred.entered_by === 'admin' ? 'admin' : 'jugador'}
+														<span class="amc-pred-summary">
+															<span class="amc-pred-winner">{winnerLabel(pred, match)}</span>
+															{#if pred.has_exact_score}
+																<span class="amc-pred-score">{pred.predicted_home} — {pred.predicted_away}</span>
+															{:else}
+																<span class="amc-pred-noscore">sin marcador</span>
+															{/if}
 														</span>
+														{#if pred.entered_by === 'admin'}
+															<button class="amc-admin-tag" title="Editar pronóstico"
+																on:click={() => startEditPred(match.id, player.id, pred, match)}>
+																ADMIN
+															</button>
+														{:else}
+															<span class="amc-jugador-tag">jugador</span>
+														{/if}
 													</div>
-												{:else if !closed && pform}
+												{:else if pform && getPredStatus(match) !== 'waiting'}
 													<div class="amc-prow-entry">
 														<div class="amc-seg">
 															<button class="amc-seg-btn" class:sel={pform.winner === match.team_home}
-																on:click={() => { pform.winner = match.team_home; predForms = {...predForms}; }}>
+																on:click={() => setPredWinner(match.id, player.id, match.team_home)}>
 																{match.team_home}
 															</button>
 															{#if match.phase === 'groups'}
 																<button class="amc-seg-btn amc-seg-mid" class:sel={pform.winner === 'draw'}
-																	on:click={() => { pform.winner = 'draw'; predForms = {...predForms}; }}>
+																	on:click={() => setPredWinner(match.id, player.id, 'draw')}>
 																	Empate
 																</button>
 															{/if}
 															<button class="amc-seg-btn" class:sel={pform.winner === match.team_away}
-																on:click={() => { pform.winner = match.team_away; predForms = {...predForms}; }}>
+																on:click={() => setPredWinner(match.id, player.id, match.team_away)}>
 																{match.team_away}
 															</button>
 														</div>
-														{#if pform.winner && pform.winner !== 'draw'}
-															<input class="amc-mini-score" type="number" min="0" bind:value={pform.scoreHome} placeholder="0" />
+														{#if pform.winner}
+															<input class="amc-mini-score" type="number" min="0" bind:value={pform.scoreHome} placeholder="—" />
 															<span class="amc-mini-sep">-</span>
-															<input class="amc-mini-score" type="number" min="0" bind:value={pform.scoreAway} placeholder="0" />
+															<input class="amc-mini-score" type="number" min="0" bind:value={pform.scoreAway} placeholder="—" />
 														{/if}
 														<button class="amc-save-pred" disabled={!pform.winner || pform.saving}
 															on:click={() => savePred(match, player.id)}>
 															{pform.saving ? '…' : '✔'}
 														</button>
+														{#if isEditing}
+															<button class="amc-cancel-edit"
+																on:click={() => { editingPreds[match.id].delete(player.id); editingPreds = {...editingPreds}; }}>
+																✕
+															</button>
+														{/if}
 													</div>
 												{:else}
-													<span class="amc-no-pred" class:is-closed={closed}>{closed ? '🔴 cerrado' : '—'}</span>
+													<span class="amc-no-pred" class:is-closed={closed}>{closed ? '🔴 cerrado' : getPredStatus(match) === 'waiting' ? '🟡 en espera' : '—'}</span>
 												{/if}
 											</div>
 										{/each}
@@ -1281,13 +1424,32 @@
 	.admin-mode-badge.real { color: var(--green); border-color: rgba(26,158,106,0.4); background: rgba(26,158,106,0.08); }
 
 	/* ─── MODO ─── */
-	.admin-mode-section {
+	.admin-mode-section,
+	.admin-live-section {
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
 		gap: 16px;
 		flex-wrap: wrap;
 	}
+	.admin-live-btn {
+		font-family: 'Inter', monospace;
+		font-size: 12px;
+		font-weight: 700;
+		letter-spacing: 0.06em;
+		padding: 10px 18px;
+		border-radius: 10px;
+		border: 2px solid var(--red);
+		background: var(--red);
+		color: #fff;
+		cursor: pointer;
+		transition: all 0.2s;
+		white-space: nowrap;
+	}
+	.admin-live-btn:hover:not(:disabled) { opacity: 0.85; }
+	.admin-live-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+	.admin-live-btn.firing { animation: pulse-btn 0.8s ease-in-out infinite; }
+	@keyframes pulse-btn { 0%,100%{opacity:1} 50%{opacity:0.5} }
 	.admin-mode-info { flex: 1; }
 	.admin-section-title {
 		font-family: 'Inter', sans-serif;
@@ -1995,6 +2157,33 @@
 		white-space: nowrap;
 	}
 	.amc-switch-lbl.open { color: #1a8a4e; }
+	.amc-tri-switch {
+		display: flex;
+		border: 1px solid #c0cfe0;
+		border-radius: 8px;
+		overflow: hidden;
+		flex-shrink: 0;
+	}
+	.amc-tri-btn {
+		font-family: 'Inter', sans-serif;
+		font-size: 11px;
+		font-weight: 600;
+		padding: 5px 10px;
+		border: none;
+		border-right: 1px solid #c0cfe0;
+		background: #f5f8ff;
+		color: #888;
+		cursor: pointer;
+		transition: all 0.15s;
+		white-space: nowrap;
+	}
+	.amc-tri-btn:last-child { border-right: none; }
+	.amc-tri-btn:hover { background: #eef4ff; color: #444; }
+	.amc-tri-btn.active[data-status="waiting"] { background: #fff8e1; color: #b07d00; }
+	.amc-tri-btn.active { background: #e8f4ff; color: #1a5a9e; }
+	.amc-tri-btn:nth-child(1).active { background: #fff8e1; color: #b07d00; }
+	.amc-tri-btn:nth-child(2).active { background: #e6f7ee; color: #1a8a4e; }
+	.amc-tri-btn:nth-child(3).active { background: #fdecea; color: #c0392b; }
 	.amc-winner-sel {
 		font-size: 13px;
 		padding: 5px 8px;
@@ -2019,6 +2208,7 @@
 		transition: opacity 0.2s;
 	}
 	.amc-confirm-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+	.amc-confirm-btn.confirmed { background: #1a8a4e; opacity: 1; cursor: default; }
 	.amc-et-row {
 		display: flex; align-items: center; gap: 6px;
 		padding: 6px 10px;
@@ -2084,7 +2274,32 @@
 		gap: 8px;
 		transition: border-color 0.15s;
 	}
-	.amc-prow.has-pred { border-color: #b3e6cc; background: #f0fdf6; }
+	.amc-prow.has-pred {
+		border-color: #2a4a7f;
+		background: #0f2544;
+		flex-direction: row;
+		align-items: center;
+		gap: 8px;
+		padding: 8px 12px;
+		position: relative;
+	}
+	.amc-prow.has-pred .amc-prow-name { color: #c8d8f0; font-size: 12px; flex-shrink: 0; }
+	.amc-prow.has-pred .amc-by-pill { background: rgba(91,155,213,0.15); color: #7aa8d4; flex-shrink: 0; }
+	.amc-prow.is-missed {
+		border-color: #1e3660;
+		background: #0a1e3a;
+		flex-direction: row;
+		align-items: center;
+		gap: 8px;
+		padding: 5px 12px;
+	}
+	.amc-prow.is-missed .amc-prow-name { color: #4a6a99; font-size: 12px; flex-shrink: 0; }
+	.amc-missed-lbl {
+		font-size: 11px;
+		color: #3a5a8a;
+		font-style: italic;
+		margin-left: auto;
+	}
 	.amc-prow-name {
 		font-size: 13px;
 		font-weight: 700;
@@ -2194,6 +2409,77 @@
 	.amc-save-pred:disabled { opacity: 0.4; cursor: not-allowed; }
 	.amc-no-pred { font-size: 12px; color: #aaa; }
 	.amc-no-pred.is-closed { color: #e06060; }
+	.amc-pred-summary {
+		display: flex;
+		align-items: center;
+		gap: 6px;
+		flex: 1;
+		min-width: 0;
+	}
+	.amc-pred-winner {
+		font-size: 12px;
+		font-weight: 700;
+		color: #8bbde8;
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+	.amc-pred-score {
+		font-family: 'DM Mono', monospace;
+		font-size: 12px;
+		font-weight: 700;
+		color: #e8f0fb;
+		white-space: nowrap;
+		flex-shrink: 0;
+	}
+	.amc-pred-noscore {
+		font-size: 11px;
+		color: #f5c200;
+		font-style: italic;
+		flex-shrink: 0;
+	}
+	.amc-admin-tag {
+		font-family: 'Inter', monospace;
+		font-size: 9px;
+		font-weight: 800;
+		letter-spacing: 0.12em;
+		background: rgba(91,155,213,0.2);
+		border: 1px solid rgba(91,155,213,0.4);
+		border-radius: 5px;
+		padding: 3px 8px;
+		color: #7aa8d4;
+		cursor: pointer;
+		position: absolute;
+		top: 50%;
+		right: 10px;
+		transform: translateY(-50%);
+		transition: all 0.15s;
+	}
+	.amc-admin-tag:hover { background: rgba(91,155,213,0.35); color: #add0f0; border-color: rgba(91,155,213,0.7); }
+	.amc-jugador-tag {
+		font-family: 'Inter', monospace;
+		font-size: 10px;
+		font-weight: 700;
+		letter-spacing: 0.08em;
+		background: rgba(255,255,255,0.06);
+		border: 1px solid rgba(255,255,255,0.1);
+		border-radius: 5px;
+		padding: 2px 7px;
+		color: #5a7a9a;
+		flex-shrink: 0;
+	}
+	.amc-cancel-edit {
+		font-size: 13px;
+		background: none;
+		border: 1px solid #e0a0a0;
+		border-radius: 5px;
+		padding: 3px 7px;
+		color: #c06060;
+		cursor: pointer;
+		flex-shrink: 0;
+		transition: all 0.15s;
+	}
+	.amc-cancel-edit:hover { background: #fff0f0; }
 
 	/* Finished list */
 	.amc-finished-list {
