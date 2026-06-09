@@ -126,7 +126,7 @@
 		if (session) {
 			user = await refreshSession();
 			if (user) {
-				if (user.is_admin) { window.location.href = '/mundial/admin'; return; }
+				if (user.is_admin) { window.location.href = '/mundial/arbitro'; return; }
 				section = 'main';
 				await loadData();
 			}
@@ -146,7 +146,7 @@
 		const result = await login(loginUsername, loginCode);
 		if (result.success && result.user) {
 			user = result.user;
-			if (user.is_admin) { window.location.href = '/mundial/admin'; return; }
+			if (user.is_admin) { window.location.href = '/mundial/arbitro'; return; }
 			section = 'main';
 			await loadData();
 		} else {

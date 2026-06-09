@@ -454,6 +454,9 @@
 
 	<footer class="ph-footer">
 		<p class="nota">Prode Cíclico · Mundial 2026 · Resultados en tiempo real</p>
+		<p class="ph-footer-login">
+			¿Sos jugador? <a href="/mundial/jugador/login">Ingresá acá</a>
+		</p>
 	</footer>
 
 </div>
@@ -814,4 +817,7 @@
 	.ph-empty { text-align: center; color: var(--muted); font-size: 14px; padding: 20px 0; }
 	.ph-footer { text-align: center; padding: 32px 24px; }
 	.nota { font-size: 11px; color: var(--muted); font-family: 'DM Mono', monospace; }
+	.ph-footer-login { font-size: 12px; color: var(--muted); margin-top: 6px; }
+	.ph-footer-login a { color: var(--celeste); text-decoration: none; font-weight: 600; }
+	.ph-footer-login a:hover { text-decoration: underline; }
 </style>
