@@ -309,7 +309,7 @@
 			is_rehearsal: isRehearsalMode
 		};
 
-		const { error } = await supabase.from('predictions').insert(payload);
+		const { error } = await supabase.from('predictions').upsert(payload, { onConflict: 'user_id,match_id' });
 
 		if (error) {
 			alert('Error al guardar el pronóstico: ' + error.message);
