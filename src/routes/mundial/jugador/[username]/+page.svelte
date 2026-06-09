@@ -814,9 +814,17 @@
 
 								<!-- Marcador exacto (opcional) -->
 								{#if form.winner}
+									{@const h = parseInt(form.home)}
+									{@const a = parseInt(form.away)}
+									{@const hasBoth = form.home !== '' && form.away !== '' && !isNaN(h) && !isNaN(a)}
+									{@const scoreInvalid = hasBoth && (
+										(form.winner === 'home' && h <= a) ||
+										(form.winner === 'away' && a <= h) ||
+										(form.winner === 'draw' && h !== a)
+									)}
 									<div class="prode-score-optional">
 										<span class="prode-score-label">Marcador exacto (opcional — da bonus)</span>
-										<div class="prode-score-inputs">
+										<div class="prode-score-inputs" class:score-error={scoreInvalid}>
 											<div class="prode-score-team-wrap">
 												<span class="prode-score-team-name">{match.team_home}</span>
 												<input
@@ -824,6 +832,7 @@
 													min="0"
 													max="20"
 													class="prode-score-input"
+													class:input-error={scoreInvalid}
 													placeholder="—"
 													bind:value={predictionForms[match.id].home}
 												/>
@@ -835,17 +844,23 @@
 													min="0"
 													max="20"
 													class="prode-score-input"
+													class:input-error={scoreInvalid}
 													placeholder="—"
 													bind:value={predictionForms[match.id].away}
 												/>
 												<span class="prode-score-team-name">{match.team_away}</span>
 											</div>
 										</div>
+										{#if scoreInvalid}
+											<span class="prode-score-hint">
+												{form.winner === 'draw' ? 'Para empate los goles deben ser iguales' : 'El marcador no coincide con el ganador elegido'}
+											</span>
+										{/if}
 									</div>
 
 									<button
 										class="prode-btn-primary"
-										disabled={form.submitting}
+										disabled={form.submitting || scoreInvalid}
 										on:click={() => submitPrediction(match)}
 									>
 										{form.submitting ? 'Guardando...' : '✔ Confirmar pronóstico'}
@@ -1547,6 +1562,14 @@
 	.prode-score-input::-webkit-outer-spin-button,
 	.prode-score-input::-webkit-inner-spin-button { -webkit-appearance: none; }
 	.prode-score-input:focus { border-color: var(--celeste); }
+	.prode-score-input.input-error { border-color: var(--red) !important; background: rgba(255,80,80,0.06); }
+	.prode-score-hint {
+		display: block;
+		font-size: 11px;
+		color: var(--red);
+		margin-top: 6px;
+		font-style: italic;
+	}
 	.prode-score-sep {
 		font-family: 'DM Mono', monospace;
 		font-size: 24px;
