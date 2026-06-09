@@ -835,6 +835,7 @@
 													class:input-error={scoreInvalid}
 													placeholder="—"
 													bind:value={predictionForms[match.id].home}
+													on:input={() => predictionForms = { ...predictionForms }}
 												/>
 											</div>
 											<span class="prode-score-sep">-</span>
@@ -847,6 +848,7 @@
 													class:input-error={scoreInvalid}
 													placeholder="—"
 													bind:value={predictionForms[match.id].away}
+													on:input={() => predictionForms = { ...predictionForms }}
 												/>
 												<span class="prode-score-team-name">{match.team_away}</span>
 											</div>
