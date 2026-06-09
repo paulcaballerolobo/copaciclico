@@ -1,0 +1,105 @@
+Etapa,Fecha,Partido,Sede,Estadio
+Grupo A,Jueves 11/06/2026,México vs Sudáfrica,Ciudad de México,Estadio Ciudad de México
+Grupo A,Jueves 11/06/2026,Corea del Sur vs República Checa,Guadalajara,Estadio Guadalajara
+Grupo A,Jueves 18/06/2026,República Checa vs Sudáfrica,Atlanta,Estadio Atlanta
+Grupo A,Jueves 18/06/2026,México vs Corea del Sur,Guadalajara,Estadio Guadalajara
+Grupo A,Miércoles 24/06/2026,República Checa vs México,Ciudad de México,Estadio Ciudad de México
+Grupo A,Miércoles 24/06/2026,Sudáfrica vs Corea del Sur,Monterrey,Estadio Monterrey
+Grupo B,Viernes 12/06/2026,Canadá vs Bosnia y Herzegovina,Toronto,Estadio Toronto
+Grupo B,Sábado 13/06/2026,Catar vs Suiza,San Francisco,Estadio San Francisco
+Grupo B,Jueves 18/06/2026,Suiza vs Bosnia y Herzegovina,Los Ángeles,Estadio Los Ángeles
+Grupo B,Jueves 18/06/2026,Canadá vs Catar,Vancouver,BC Place Vancouver
+Grupo B,Miércoles 24/06/2026,Suiza vs Canadá,Vancouver,BC Place Vancouver
+Grupo B,Miércoles 24/06/2026,Bosnia y Herzegovina vs Catar,Seattle,Estadio Seattle
+Grupo C,Sábado 13/06/2026,Haití vs Escocia,Boston,Estadio Boston
+Grupo C,Sábado 13/06/2026,Brasil vs Marruecos,Nueva York/Nueva Jersey,Estadio Nueva York Nueva Jersey
+Grupo C,Viernes 19/06/2026,Escocia vs Marruecos,Boston,Estadio Boston
+Grupo C,Viernes 19/06/2026,Brasil vs Haití,Filadelfia,Estadio Filadelfia
+Grupo C,Miércoles 24/06/2026,Escocia vs Brasil,Miami,Estadio Miami
+Grupo C,Miércoles 24/06/2026,Marruecos vs Haití,Atlanta,Estadio Atlanta
+Grupo D,Viernes 12/06/2026,Estados Unidos vs Paraguay,Los Ángeles,Estadio Los Ángeles
+Grupo D,Sábado 13/06/2026,Australia vs Turquía,Vancouver,BC Place Vancouver
+Grupo D,Viernes 19/06/2026,Turquía vs Paraguay,San Francisco,Estadio San Francisco
+Grupo D,Viernes 19/06/2026,Estados Unidos vs Australia,Seattle,Estadio Seattle
+Grupo D,Jueves 25/06/2026,Turquía vs Estados Unidos,Los Ángeles,Estadio Los Ángeles
+Grupo D,Jueves 25/06/2026,Paraguay vs Australia,San Francisco,Estadio San Francisco
+Grupo E,Domingo 14/06/2026,Costa de Marfil vs Ecuador,Filadelfia,Estadio Filadelfia
+Grupo E,Domingo 14/06/2026,Alemania vs Curazao,Houston,Estadio Houston
+Grupo E,Sábado 20/06/2026,Alemania vs Costa de Marfil,Toronto,Estadio Toronto
+Grupo E,Sábado 20/06/2026,Ecuador vs Curazao,Kansas City,Estadio Kansas City
+Grupo E,Jueves 25/06/2026,Curazao vs Costa de Marfil,Filadelfia,Estadio Filadelfia
+Grupo E,Jueves 25/06/2026,Ecuador vs Alemania,Nueva York/Nueva Jersey,Estadio Nueva York Nueva Jersey
+Grupo F,Domingo 14/06/2026,Países Bajos vs Japón,Dallas,Estadio Dallas
+Grupo F,Domingo 14/06/2026,Suecia vs Túnez,Monterrey,Estadio Monterrey
+Grupo F,Sábado 20/06/2026,Países Bajos vs Suecia,Houston,Estadio Houston
+Grupo F,Sábado 20/06/2026,Túnez vs Japón,Monterrey,Estadio Monterrey
+Grupo F,Jueves 25/06/2026,Japón vs Suecia,Dallas,Estadio Dallas
+Grupo F,Jueves 25/06/2026,Túnez vs Países Bajos,Kansas City,Estadio Kansas City
+Grupo G,Lunes 15/06/2026,Irán vs Nueva Zelanda,Los Ángeles,Estadio Los Ángeles
+Grupo G,Lunes 15/06/2026,Bélgica vs Egipto,Seattle,Estadio Seattle
+Grupo G,Domingo 21/06/2026,Bélgica vs Irán,Los Ángeles,Estadio Los Ángeles
+Grupo G,Domingo 21/06/2026,Nueva Zelanda vs Egipto,Vancouver,BC Place Vancouver
+Grupo G,Viernes 26/06/2026,Egipto vs Irán,Seattle,Estadio Seattle
+Grupo G,Viernes 26/06/2026,Nueva Zelanda vs Bélgica,Vancouver,BC Place Vancouver
+Grupo H,Lunes 15/06/2026,España vs Cabo Verde,Atlanta,Estadio Atlanta
+Grupo H,Lunes 15/06/2026,Arabia Saudita vs Uruguay,Miami,Estadio Miami
+Grupo H,Domingo 21/06/2026,España vs Arabia Saudita,Atlanta,Estadio Atlanta
+Grupo H,Domingo 21/06/2026,Uruguay vs Cabo Verde,Miami,Estadio Miami
+Grupo H,Viernes 26/06/2026,Cabo Verde vs Arabia Saudita,Houston,Estadio Houston
+Grupo H,Viernes 26/06/2026,Uruguay vs España,Guadalajara,Estadio Guadalajara
+Grupo I,Martes 16/06/2026,Francia vs Senegal,Nueva York/Nueva Jersey,Estadio Nueva York Nueva Jersey
+Grupo I,Martes 16/06/2026,Irak vs Noruega,Boston,Estadio Boston
+Grupo I,Lunes 22/06/2026,Francia vs Irak,Filadelfia,Estadio Filadelfia
+Grupo I,Lunes 22/06/2026,Noruega vs Senegal,Nueva York/Nueva Jersey,Estadio Nueva York Nueva Jersey
+Grupo I,Viernes 26/06/2026,Noruega vs Francia,Boston,Estadio Boston
+Grupo I,Viernes 26/06/2026,Senegal vs Irak,Toronto,Estadio Toronto
+Grupo J,Martes 16/06/2026,Argentina vs Argelia,Kansas City,Estadio Kansas City
+Grupo J,Martes 16/06/2026,Austria vs Jordania,San Francisco,Estadio San Francisco
+Grupo J,Lunes 22/06/2026,Argentina vs Austria,Dallas,Estadio Dallas
+Grupo J,Lunes 22/06/2026,Jordania vs Argelia,San Francisco,Estadio San Francisco
+Grupo J,Sábado 27/06/2026,Argelia vs Austria,Kansas City,Estadio Kansas City
+Grupo J,Sábado 27/06/2026,Jordania vs Argentina,Dallas,Estadio Dallas
+Grupo K,Miércoles 17/06/2026,Portugal vs RD Congo,Houston,Estadio Houston
+Grupo K,Miércoles 17/06/2026,Uzbekistán vs Colombia,Ciudad de México,Estadio Ciudad de México
+Grupo K,Martes 23/06/2026,Portugal vs Uzbekistán,Houston,Estadio Houston
+Grupo K,Martes 23/06/2026,Colombia vs RD Congo,Guadalajara,Estadio Guadalajara
+Grupo K,Sábado 27/06/2026,Colombia vs Portugal,Miami,Estadio Miami
+Grupo K,Sábado 27/06/2026,RD Congo vs Uzbekistán,Atlanta,Estadio Atlanta
+Grupo L,Miércoles 17/06/2026,Inglaterra vs Croacia,Dallas,Estadio Dallas
+Grupo L,Miércoles 17/06/2026,Ghana vs Panamá,Toronto,Estadio Toronto
+Grupo L,Martes 23/06/2026,Inglaterra vs Ghana,Boston,Estadio Boston
+Grupo L,Martes 23/06/2026,Panamá vs Croacia,Toronto,Estadio Toronto
+Grupo L,Sábado 27/06/2026,Panamá vs Inglaterra,Nueva York/Nueva Jersey,Estadio Nueva York Nueva Jersey
+Grupo L,Sábado 27/06/2026,Croacia vs Ghana,Filadelfia,Estadio Filadelfia
+Dieciseisavos,Domingo 28/06/2026,2°A vs 2°B,Los Ángeles,Estadio Los Ángeles
+Dieciseisavos,Lunes 29/06/2026,1°E vs 3°,Boston,Estadio Boston
+Dieciseisavos,Lunes 29/06/2026,1°F vs 2°C,Monterrey,Estadio Monterrey
+Dieciseisavos,Lunes 29/06/2026,1°C vs 2°F,Houston,Estadio Houston
+Dieciseisavos,Martes 30/06/2026,1°I vs 3°,Nueva York/Nueva Jersey,Estadio Nueva York Nueva Jersey
+Dieciseisavos,Martes 30/06/2026,2°E vs 2°I,Dallas,Estadio Dallas
+Dieciseisavos,Miércoles 01/07/2026,1°A vs 3°,Ciudad de México,Estadio Ciudad de México
+Dieciseisavos,Miércoles 01/07/2026,1°L vs 3°,Atlanta,Estadio Atlanta
+Dieciseisavos,Miércoles 01/07/2026,1°G vs 3°,Seattle,Estadio Seattle
+Dieciseisavos,Jueves 02/07/2026,1°D vs 3°,San Francisco,Estadio San Francisco
+Dieciseisavos,Jueves 02/07/2026,1°H vs 2°J,Los Ángeles,Estadio Los Ángeles
+Dieciseisavos,Jueves 02/07/2026,2°K vs 2°L,Toronto,Estadio Toronto
+Dieciseisavos,Viernes 03/07/2026,1°B vs 3°,Vancouver,BC Place Vancouver
+Dieciseisavos,Viernes 03/07/2026,1°J vs 2°H,Miami,Estadio Miami
+Dieciseisavos,Viernes 03/07/2026,1°K vs 3°,Kansas City,Estadio Kansas City
+Dieciseisavos,Viernes 03/07/2026,2°D vs 2°G,Dallas,Estadio Dallas
+Octavos,Sábado 04/07/2026,W74 vs W77,Filadelfia,Estadio Filadelfia
+Octavos,Sábado 04/07/2026,W73 vs W75,Houston,Estadio Houston
+Octavos,Domingo 05/07/2026,W76 vs W78,Nueva York/Nueva Jersey,Estadio Nueva York Nueva Jersey
+Octavos,Lunes 06/07/2026,W79 vs W80,Ciudad de México,Estadio Ciudad de México
+Octavos,Lunes 06/07/2026,W83 vs W84,Dallas,Estadio Dallas
+Octavos,Martes 07/07/2026,W81 vs W82,Seattle,Estadio Seattle
+Octavos,Martes 07/07/2026,W86 vs W88,Atlanta,Estadio Atlanta
+Octavos,Martes 07/07/2026,W85 vs W87,Vancouver,BC Place Vancouver
+Cuartos,Jueves 09/07/2026,W89 vs W90,Boston,Estadio Boston
+Cuartos,Viernes 10/07/2026,W93 vs W94,Los Ángeles,Estadio Los Ángeles
+Cuartos,Sábado 11/07/2026,W91 vs W92,Miami,Estadio Miami
+Cuartos,Sábado 11/07/2026,W95 vs W96,Kansas City,Estadio Kansas City
+Semifinales,Martes 14/07/2026,W97 vs W98,Dallas,Estadio Dallas
+Semifinales,Miércoles 15/07/2026,W99 vs W100,Atlanta,Estadio Atlanta
+Tercer puesto,Sábado 18/07/2026,Perdedor SF1 vs Perdedor SF2,Miami,Estadio Miami
+Final,Domingo 19/07/2026,Ganador SF1 vs Ganador SF2,Nueva York/Nueva Jersey,MetLife Stadium

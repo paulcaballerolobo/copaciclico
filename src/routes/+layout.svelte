@@ -9,7 +9,8 @@
 		{ href: '/paises', label: 'Países' },
 		{ href: '/calendario', label: 'Calendario' },
 		{ href: '/ciudades', label: 'Ciudades' },
-		{ href: '/stats', label: 'Estadísticas' }
+		{ href: '/stats', label: 'Estadísticas' },
+		{ href: '/mundial', label: '🏆 Prode Cíclico', prode: true }
 	];
 </script>
 
@@ -19,11 +20,12 @@
 	</a>
 	<div class="nav-tabs">
 		{#each tabs as tab}
-			<a
-				href={tab.href}
-				class="nav-tab"
-				class:active={$page.url.pathname === tab.href}
-			>{tab.label}</a>
+				<a
+					href={tab.href}
+					class="nav-tab"
+					class:active={tab.prode ? $page.url.pathname.startsWith('/mundial') : $page.url.pathname === tab.href}
+					class:nav-tab-prode={tab.prode}
+				>{tab.label}</a>
 		{/each}
 	</div>
 	<div class="nav-badge">Mundial 2026</div>
@@ -75,6 +77,8 @@
 	}
 	.nav-tab:hover { color: var(--text); border-color: var(--border); }
 	.nav-tab.active { color: var(--celeste); border-color: var(--celeste); background: rgba(91, 155, 213, 0.08); }
+	.nav-tab-prode { color: var(--amarillo-dim) !important; border-color: rgba(245,194,0,0.3); }
+	.nav-tab-prode.active { background: rgba(245,194,0,0.1); border-color: var(--amarillo-dim); color: var(--amarillo-dim) !important; }
 	.nav-badge {
 		margin-left: auto;
 		font-family: 'Inter', monospace;
