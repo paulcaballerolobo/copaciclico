@@ -266,7 +266,9 @@
 	}
 
 	function selectWinner(matchId: string, winner: string) {
-		if (!predictionForms[matchId]) return;
+		if (!predictionForms[matchId]) {
+			predictionForms[matchId] = { winner: '', home: '', away: '', submitting: false, submitted: false };
+		}
 		predictionForms[matchId] = { ...predictionForms[matchId], winner };
 		predictionForms = { ...predictionForms };
 	}
@@ -309,7 +311,9 @@
 			is_rehearsal: isRehearsalMode
 		};
 
-		const { error } = await supabase.from('predictions').upsert(payload, { onConflict: 'user_id,match_id' });
+		// Borrar pronóstico previo si existe, luego insertar
+		await supabase.from('predictions').delete().eq('user_id', user.id).eq('match_id', match.id);
+		const { error } = await supabase.from('predictions').insert(payload);
 
 		if (error) {
 			alert('Error al guardar el pronóstico: ' + error.message);
@@ -794,15 +798,13 @@
 									>
 										{flag(match.team_home)} {match.team_home}
 									</button>
-									{#if match.phase === 'groups'}
-										<button
-											class="prode-winner-btn prode-draw-btn"
-											class:selected={form.winner === 'draw'}
-											on:click={() => selectWinner(match.id, 'draw')}
-										>
-											Empate
-										</button>
-									{/if}
+									<button
+										class="prode-winner-btn prode-draw-btn"
+										class:selected={form.winner === 'draw'}
+										on:click={() => selectWinner(match.id, 'draw')}
+									>
+										Empate
+									</button>
 									<button
 										class="prode-winner-btn"
 										class:selected={form.winner === 'away'}
