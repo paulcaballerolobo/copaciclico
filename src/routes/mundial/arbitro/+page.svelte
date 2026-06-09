@@ -19,6 +19,11 @@
 		result_away: number | null;
 		winner: string | null;
 		went_to_penalties: boolean;
+		went_to_extra_time: boolean;
+		extra_time_home: number | null;
+		extra_time_away: number | null;
+		penalties_home: number | null;
+		penalties_away: number | null;
 		predictions_open: boolean;
 		confirmed_by_admin: boolean;
 	}
@@ -87,7 +92,7 @@
 	let modeTargetReal = false;
 
 	// Resultado de partido
-	let resultForms: Record<string, { home: string; away: string; winner: string; penalties: boolean; saving: boolean }> = {};
+	let resultForms: Record<string, { home: string; away: string; winner: string; penalties: boolean; extraTime: boolean; etHome: string; etAway: string; penHome: string; penAway: string; saving: boolean }> = {};
 
 	// Pronósticos por partido
 	let expandedPreds: Set<string> = new Set();
@@ -170,6 +175,11 @@
 					away: m.result_away !== null ? String(m.result_away) : '',
 					winner: m.winner ?? '',
 					penalties: m.went_to_penalties,
+					extraTime: m.went_to_extra_time,
+					etHome: m.extra_time_home !== null ? String(m.extra_time_home) : '',
+					etAway: m.extra_time_away !== null ? String(m.extra_time_away) : '',
+					penHome: m.penalties_home !== null ? String(m.penalties_home) : '',
+					penAway: m.penalties_away !== null ? String(m.penalties_away) : '',
 					saving: false
 				};
 			}
@@ -250,6 +260,11 @@
 			result_away: resultAway,
 			winner: form.winner,
 			went_to_penalties: form.penalties,
+			went_to_extra_time: form.extraTime,
+			extra_time_home: form.extraTime && form.etHome !== '' ? parseInt(form.etHome) : null,
+			extra_time_away: form.extraTime && form.etAway !== '' ? parseInt(form.etAway) : null,
+			penalties_home: form.penalties && form.penHome !== '' ? parseInt(form.penHome) : null,
+			penalties_away: form.penalties && form.penAway !== '' ? parseInt(form.penAway) : null,
 			status: 'finished',
 			confirmed_by_admin: true
 		}).eq('id', match.id);
@@ -832,9 +847,29 @@
 											<option value="away">{match.team_away}</option>
 										</select>
 										<label class="amc-switch">
-											<input type="checkbox" bind:checked={form.penalties} />
-											<span class="amc-switch-lbl">Penales</span>
+											<input type="checkbox" bind:checked={form.extraTime} on:change={() => { if (!form.extraTime) form.penalties = false; resultForms = {...resultForms}; }} />
+											<span class="amc-switch-lbl">Prórroga</span>
 										</label>
+										{#if form.extraTime}
+											<div class="amc-et-row">
+												<span class="amc-et-lbl">Prórr.</span>
+												<input class="amc-et-input" type="number" min="0" max="20" placeholder="—" bind:value={form.etHome} />
+												<span>-</span>
+												<input class="amc-et-input" type="number" min="0" max="20" placeholder="—" bind:value={form.etAway} />
+											</div>
+											<label class="amc-switch">
+												<input type="checkbox" bind:checked={form.penalties} />
+												<span class="amc-switch-lbl">Penales</span>
+											</label>
+											{#if form.penalties}
+												<div class="amc-et-row">
+													<span class="amc-et-lbl">Pen.</span>
+													<input class="amc-et-input" type="number" min="0" max="30" placeholder="—" bind:value={form.penHome} />
+													<span>-</span>
+													<input class="amc-et-input" type="number" min="0" max="30" placeholder="—" bind:value={form.penAway} />
+												</div>
+											{/if}
+										{/if}
 									{/if}
 									<button class="amc-confirm-btn" disabled={form.saving} on:click={() => {
 										if (match.phase === 'groups') {
@@ -849,7 +884,8 @@
 							{:else if match.status === 'finished'}
 								<div class="amc-result-done">
 									Ganó <strong>{match.winner === 'home' ? match.team_home : match.winner === 'away' ? match.team_away : 'Empate'}</strong>
-									{match.went_to_penalties ? '· por penales' : ''}
+									{#if match.went_to_extra_time}· prórroga {match.extra_time_home}-{match.extra_time_away}{/if}
+									{#if match.went_to_penalties}· penales {match.penalties_home}-{match.penalties_away}{/if}
 								</div>
 							{/if}
 
@@ -1983,6 +2019,19 @@
 		transition: opacity 0.2s;
 	}
 	.amc-confirm-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+	.amc-et-row {
+		display: flex; align-items: center; gap: 6px;
+		padding: 6px 10px;
+		background: rgba(0,0,0,0.04);
+		border-radius: 8px;
+		font-size: 13px;
+	}
+	.amc-et-lbl { font-weight: 700; color: #555; min-width: 40px; }
+	.amc-et-input {
+		width: 48px; text-align: center;
+		border: 1px solid #ddd; border-radius: 6px;
+		padding: 4px 6px; font-size: 16px; font-family: 'DM Mono', monospace;
+	}
 	.amc-result-done {
 		padding: 10px 18px 12px;
 		font-size: 13px;

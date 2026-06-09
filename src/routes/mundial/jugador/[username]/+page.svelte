@@ -19,6 +19,12 @@
 		result_home: number | null;
 		result_away: number | null;
 		winner: string | null;
+		went_to_extra_time: boolean;
+		extra_time_home: number | null;
+		extra_time_away: number | null;
+		went_to_penalties: boolean;
+		penalties_home: number | null;
+		penalties_away: number | null;
 		predictions_open: boolean;
 	}
 
@@ -904,7 +910,9 @@
 
 							{#if match?.status === 'finished' && match.result_home !== null}
 								<div class="prode-sent-result">
-									<span class="prode-sent-result-score">{match.result_home} - {match.result_away}</span>
+									<span class="prode-sent-result-score">{match.result_home} - {match.result_away}
+										{#if match.went_to_extra_time}<span class="prode-sent-et">(ET {match.extra_time_home}-{match.extra_time_away}{match.went_to_penalties ? ` · Pen. ${match.penalties_home}-${match.penalties_away}` : ''})</span>{/if}
+									</span>
 									<span class="prode-sent-result-icon">
 										{pred.is_correct ? '✅' : '❌'}
 										{pred.exact_score_correct ? '✅ exacto' : pred.exact_score_wrong ? '❌ exacto' : ''}
@@ -1623,6 +1631,12 @@
 		font-family: 'DM Mono', monospace;
 		font-weight: 700;
 		font-size: 15px;
+	}
+	.prode-sent-et {
+		font-size: 11px;
+		font-weight: 400;
+		color: var(--muted);
+		margin-left: 4px;
 	}
 	.prode-sent-pts {
 		font-family: 'DM Mono', monospace;
