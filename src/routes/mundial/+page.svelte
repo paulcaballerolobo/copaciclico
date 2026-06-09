@@ -46,11 +46,8 @@
 		correct: boolean;
 	}
 
-	interface VoteCount {
-		home: number;
-		draw: number;
-		away: number;
-	}
+	// vote = user_id del jugador cuyo pronóstico apoyan
+	type VoteCount = Record<string, number>;
 
 	// ─── ESTADO ───────────────────────────────────────────────────
 	let isRehearsalMode = false;
@@ -68,7 +65,7 @@
 	// Próximo partido + pronósticos + votos
 	let nextMatch: Match | null = null;
 	let nextMatchPreds: (Prediction & { full_name: string })[] = [];
-	let voteCount: VoteCount = { home: 0, draw: 0, away: 0 };
+	let voteCount: VoteCount = {};
 	let userVote: string | null = null;
 	let votingLoading = false;
 	let userIp = '';
@@ -190,13 +187,11 @@
 			.from('public_votes')
 			.select('vote')
 			.eq('match_id', nextMatch.id);
-		voteCount = { home: 0, draw: 0, away: 0 };
+		const counts: VoteCount = {};
 		for (const v of data ?? []) {
-			if (v.vote === 'home') voteCount.home++;
-			else if (v.vote === 'draw') voteCount.draw++;
-			else if (v.vote === 'away') voteCount.away++;
+			counts[v.vote] = (counts[v.vote] ?? 0) + 1;
 		}
-		voteCount = { ...voteCount };
+		voteCount = counts;
 	}
 
 	async function submitVote(vote: string) {
@@ -260,10 +255,7 @@
 
 	$: top3 = ranking.slice(0, 3);
 	$: rest = ranking.slice(3);
-	$: totalVotes = voteCount.home + voteCount.draw + voteCount.away;
-	$: votePctHome = totalVotes ? Math.round(voteCount.home / totalVotes * 100) : 0;
-	$: votePctDraw = totalVotes ? Math.round(voteCount.draw / totalVotes * 100) : 0;
-	$: votePctAway = totalVotes ? Math.round(voteCount.away / totalVotes * 100) : 0;
+	$: totalVotes = Object.values(voteCount).reduce((s, n) => s + n, 0);
 </script>
 
 <svelte:head>
@@ -401,80 +393,43 @@
 						</div>
 						<div class="ph-next-time">{formatDateAR(nextMatch.kickoff_time)}</div>
 
-						<!-- Pronósticos de jugadores -->
+						<!-- Pronósticos + votación pública por jugador -->
 						{#if nextMatchPreds.length > 0}
 							<div class="ph-preds-section">
-								<div class="ph-preds-title">Pronósticos de los jugadores</div>
-								<div class="ph-preds-list">
+								<div class="ph-preds-title">¿Cuál pronóstico va a acertar? Votá</div>
+								<div class="ph-vote-preds">
 									{#each nextMatchPreds as pred}
-										<div class="ph-pred-row">
-											<span class="ph-pred-name">{pred.full_name}</span>
-											<span class="ph-pred-pick">{predLabel(pred.predicted_winner, nextMatch)}</span>
-											{#if pred.has_exact_score}
-												<span class="ph-pred-score">{pred.predicted_home}-{pred.predicted_away}</span>
+										{@const votes = voteCount[pred.user_id] ?? 0}
+										{@const pct = totalVotes ? Math.round(votes / totalVotes * 100) : 0}
+										{@const isMyVote = userVote === pred.user_id}
+										<button
+											class="ph-pred-vote-btn"
+											class:ph-pred-voted={isMyVote}
+											class:ph-pred-already={!!userVote && !isMyVote}
+											disabled={!!userVote || votingLoading}
+											on:click={() => submitVote(pred.user_id)}
+										>
+											<div class="ph-pvb-top">
+												<span class="ph-pvb-name">{pred.full_name}</span>
+												<span class="ph-pvb-pick">{predLabel(pred.predicted_winner, nextMatch)}{pred.has_exact_score ? ` (${pred.predicted_home}-${pred.predicted_away})` : ''}</span>
+											</div>
+											{#if totalVotes > 0}
+												<div class="ph-pvb-bar-wrap">
+													<div class="ph-pvb-bar" style="width:{pct}%"></div>
+												</div>
+												<div class="ph-pvb-pct">{pct}% · {votes} {votes === 1 ? 'voto' : 'votos'}</div>
 											{/if}
-										</div>
+											{#if isMyVote}<span class="ph-pvb-check">✅ Tu voto</span>{/if}
+										</button>
 									{/each}
 								</div>
+								{#if userVote}
+									<p class="ph-voted-note">{totalVotes} {totalVotes === 1 ? 'voto' : 'votos'} en total</p>
+								{:else}
+									<p class="ph-voted-note">Tocá un pronóstico para votar · 1 voto por 24 hs</p>
+								{/if}
 							</div>
 						{/if}
-
-						<!-- Votación pública -->
-						<div class="ph-vote-section">
-							<div class="ph-vote-title">¿Quién ganará? Votá</div>
-							{#if userVote}
-								<div class="ph-voted-msg">
-									✅ Ya votaste por <strong>{predLabel(userVote, nextMatch)}</strong>
-								</div>
-							{:else}
-								<div class="ph-vote-btns">
-									<button class="ph-vote-btn ph-vote-home" disabled={votingLoading}
-										on:click={() => submitVote('home')}>
-										{flag(nextMatch.team_home)} {nextMatch.team_home}
-									</button>
-									{#if nextMatch.phase === 'groups'}
-										<button class="ph-vote-btn ph-vote-draw" disabled={votingLoading}
-											on:click={() => submitVote('draw')}>
-											Empate
-										</button>
-									{/if}
-									<button class="ph-vote-btn ph-vote-away" disabled={votingLoading}
-										on:click={() => submitVote('away')}>
-										{flag(nextMatch.team_away)} {nextMatch.team_away}
-									</button>
-								</div>
-							{/if}
-
-							<!-- Barras de votos (siempre visibles si hay votos) -->
-							{#if totalVotes > 0}
-								<div class="ph-vote-bars">
-									<div class="ph-vb-row">
-										<span class="ph-vb-label">{nextMatch.team_home}</span>
-										<div class="ph-vb-track">
-											<div class="ph-vb-fill ph-vb-home" style="width:{votePctHome}%"></div>
-										</div>
-										<span class="ph-vb-pct">{votePctHome}%</span>
-									</div>
-									{#if nextMatch.phase === 'groups'}
-										<div class="ph-vb-row">
-											<span class="ph-vb-label">Empate</span>
-											<div class="ph-vb-track">
-												<div class="ph-vb-fill ph-vb-draw" style="width:{votePctDraw}%"></div>
-											</div>
-											<span class="ph-vb-pct">{votePctDraw}%</span>
-										</div>
-									{/if}
-									<div class="ph-vb-row">
-										<span class="ph-vb-label">{nextMatch.team_away}</span>
-										<div class="ph-vb-track">
-											<div class="ph-vb-fill ph-vb-away" style="width:{votePctAway}%"></div>
-										</div>
-										<span class="ph-vb-pct">{votePctAway}%</span>
-									</div>
-									<div class="ph-vb-total">{totalVotes} {totalVotes === 1 ? 'voto' : 'votos'}</div>
-								</div>
-							{/if}
-						</div>
 					</div>
 				{/if}
 
@@ -747,98 +702,77 @@
 		font-size: 12px; color: var(--muted);
 	}
 
-	/* Pronósticos */
-	.ph-preds-section { border-top: 1px solid var(--border); padding-top: 12px; }
+	/* Pronósticos + votación por jugador */
+	.ph-preds-section { border-top: 1px solid var(--border); padding-top: 14px; }
 	.ph-preds-title {
 		font-family: 'Inter', monospace;
 		font-size: 10px; letter-spacing: 0.1em;
 		text-transform: uppercase; color: var(--muted);
-		margin-bottom: 8px;
+		margin-bottom: 10px;
 	}
-	.ph-preds-list { display: flex; flex-direction: column; gap: 5px; }
-	.ph-pred-row {
-		display: flex; align-items: center; gap: 10px;
-		padding: 6px 10px; border-radius: 8px;
-		background: rgba(255,255,255,0.35);
-		font-size: 13px;
-	}
-	.ph-pred-name { flex: 1; font-weight: 600; color: var(--text); }
-	.ph-pred-pick {
-		font-weight: 700; color: var(--celeste);
-		font-family: 'Instrument Sans', sans-serif;
-	}
-	.ph-pred-score {
-		font-family: 'DM Mono', monospace;
-		font-size: 11px; color: var(--muted);
-		background: rgba(0,0,0,0.05);
-		padding: 2px 6px; border-radius: 4px;
-	}
+	.ph-vote-preds { display: flex; flex-direction: column; gap: 8px; }
 
-	/* VOTACIÓN */
-	.ph-vote-section { border-top: 1px solid var(--border); padding-top: 14px; }
-	.ph-vote-title {
-		font-family: 'Inter', monospace;
-		font-size: 11px; letter-spacing: 0.12em;
-		text-transform: uppercase; color: var(--muted);
-		margin-bottom: 12px;
-	}
-	.ph-vote-btns { display: flex; gap: 8px; flex-wrap: wrap; }
-	.ph-vote-btn {
-		flex: 1;
-		min-width: 0;
-		font-family: 'Instrument Sans', sans-serif;
-		font-size: 14px; font-weight: 700;
-		padding: 14px 10px;
+	.ph-pred-vote-btn {
+		width: 100%;
+		text-align: left;
+		background: rgba(91,155,213,0.07);
+		border: 2px solid rgba(91,155,213,0.2);
 		border-radius: 12px;
-		border: 2px solid transparent;
+		padding: 12px 14px;
 		cursor: pointer;
 		transition: all 0.2s;
-		white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+		position: relative;
+		overflow: hidden;
 	}
-	.ph-vote-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-	.ph-vote-home { background: rgba(91,155,213,0.12); color: #2a5a9a; border-color: rgba(91,155,213,0.3); }
-	.ph-vote-home:hover:not(:disabled) { background: rgba(91,155,213,0.22); border-color: var(--celeste); }
-	.ph-vote-draw { background: rgba(180,180,180,0.1); color: var(--muted); border-color: rgba(180,180,180,0.25); }
-	.ph-vote-draw:hover:not(:disabled) { background: rgba(180,180,180,0.2); border-color: #aaa; }
-	.ph-vote-away { background: rgba(213,91,91,0.1); color: #8a2a2a; border-color: rgba(213,91,91,0.25); }
-	.ph-vote-away:hover:not(:disabled) { background: rgba(213,91,91,0.2); border-color: var(--red); }
-
-	.ph-voted-msg {
-		font-size: 14px; color: var(--green);
+	.ph-pred-vote-btn:hover:not(:disabled) {
+		background: rgba(91,155,213,0.15);
+		border-color: var(--celeste);
+	}
+	.ph-pred-vote-btn.ph-pred-voted {
 		background: rgba(61,214,140,0.1);
-		border: 1px solid rgba(61,214,140,0.3);
-		border-radius: 10px;
-		padding: 12px 16px;
-		font-weight: 600;
+		border-color: var(--green);
 	}
+	.ph-pred-vote-btn.ph-pred-already {
+		opacity: 0.55;
+	}
+	.ph-pred-vote-btn:disabled { cursor: default; }
 
-	/* Barras de votos */
-	.ph-vote-bars { display: flex; flex-direction: column; gap: 7px; margin-top: 14px; }
-	.ph-vb-row { display: flex; align-items: center; gap: 8px; }
-	.ph-vb-label {
+	.ph-pvb-top {
+		display: flex; align-items: baseline; gap: 10px;
+		margin-bottom: 6px;
+	}
+	.ph-pvb-name {
+		font-family: 'Instrument Sans', sans-serif;
+		font-size: 14px; font-weight: 700;
+		color: var(--text); flex: 1;
+	}
+	.ph-pvb-pick {
+		font-family: 'DM Mono', monospace;
+		font-size: 13px; font-weight: 700;
+		color: var(--celeste);
+	}
+	.ph-pvb-bar-wrap {
+		height: 5px;
+		background: rgba(0,0,0,0.07);
+		border-radius: 3px; overflow: hidden;
+		margin-bottom: 4px;
+	}
+	.ph-pvb-bar {
+		height: 100%; background: var(--celeste);
+		border-radius: 3px; transition: width 0.5s ease;
+	}
+	.ph-pred-voted .ph-pvb-bar { background: var(--green); }
+	.ph-pvb-pct {
 		font-family: 'DM Mono', monospace;
 		font-size: 11px; color: var(--muted);
-		width: 80px; flex-shrink: 0;
-		white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 	}
-	.ph-vb-track {
-		flex: 1; height: 8px;
-		background: rgba(0,0,0,0.06);
-		border-radius: 4px; overflow: hidden;
+	.ph-pvb-check {
+		font-size: 11px; color: var(--green);
+		font-weight: 700;
 	}
-	.ph-vb-fill { height: 100%; border-radius: 4px; transition: width 0.5s ease; }
-	.ph-vb-home { background: var(--celeste); }
-	.ph-vb-draw { background: #aaa; }
-	.ph-vb-away { background: var(--red); }
-	.ph-vb-pct {
-		font-family: 'DM Mono', monospace;
-		font-size: 12px; font-weight: 700;
-		color: var(--text); width: 36px; text-align: right;
-	}
-	.ph-vb-total {
-		font-family: 'DM Mono', monospace;
+	.ph-voted-note {
 		font-size: 11px; color: var(--muted);
-		text-align: right; margin-top: 2px;
+		text-align: center; margin: 8px 0 0;
 	}
 
 	/* POZO */
