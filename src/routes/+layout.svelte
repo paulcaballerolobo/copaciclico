@@ -5,10 +5,7 @@
 	const tabs = [
 		{ href: '/', label: 'Inicio' },
 		{ href: '/datos', label: 'Mundial de los Datos' },
-		{ href: '/fixture', label: 'Simulador' },
 		{ href: '/paises', label: 'Países' },
-		{ href: '/calendario', label: 'Calendario' },
-		{ href: '/ciudades', label: 'Ciudades' },
 		{ href: '/stats', label: 'Estadísticas' },
 		{ href: '/mundial', label: '🏆 Prode Cíclico', prode: true }
 	];
@@ -16,7 +13,7 @@
 
 <nav>
 	<a href="/" class="logo-link">
-		<img src="/Logos-CICLICO-Mundial.png" alt="Cíclico" class="logo-img" />
+		<img src="/Logos-CICLICO-Mundial-blanco.png" alt="Cíclico" class="logo-img" />
 	</a>
 	<div class="nav-tabs">
 		{#each tabs as tab}
@@ -28,7 +25,6 @@
 				>{tab.label}</a>
 		{/each}
 	</div>
-	<div class="nav-badge">Mundial 2026</div>
 </nav>
 
 <slot />
@@ -42,7 +38,7 @@
 		gap: 16px;
 		position: sticky;
 		top: 0;
-		background: rgba(255, 255, 255, 0.97);
+		background: rgba(6, 20, 40, 0.97);
 		backdrop-filter: blur(12px);
 		z-index: 200;
 	}
@@ -62,33 +58,23 @@
 	.nav-tabs::-webkit-scrollbar { display: none; }
 	.nav-tab {
 		font-family: 'Inter', monospace;
-		font-size: 11px;
+		font-size: 10px;
 		letter-spacing: 0.08em;
 		text-transform: uppercase;
-		padding: 7px 14px;
+		padding: 7px 12px;
 		border-radius: 20px;
-		border: 1px solid transparent;
+		border: none;
 		cursor: pointer;
-		color: var(--muted);
+		color: rgba(255,255,255,0.55);
 		background: none;
 		white-space: nowrap;
-		transition: all 0.2s;
+		transition: color 0.2s;
 		text-decoration: none;
 	}
-	.nav-tab:hover { color: var(--text); border-color: var(--border); }
-	.nav-tab.active { color: var(--celeste); border-color: var(--celeste); background: rgba(91, 155, 213, 0.08); }
-	.nav-tab-prode { color: var(--amarillo-dim) !important; border-color: rgba(245,194,0,0.3); }
-	.nav-tab-prode.active { background: rgba(245,194,0,0.1); border-color: var(--amarillo-dim); color: var(--amarillo-dim) !important; }
-	.nav-badge {
-		margin-left: auto;
-		font-family: 'Inter', monospace;
-		font-size: 11px;
-		color: var(--muted);
-		border: 1px solid var(--border);
-		padding: 4px 10px;
-		border-radius: 20px;
-		flex-shrink: 0;
-	}
+	.nav-tab:hover { color: rgba(255,255,255,0.9); }
+	.nav-tab.active { color: #fff; background: rgba(255,255,255,0.1); }
+	.nav-tab-prode { color: var(--amarillo-dim) !important; }
+	.nav-tab-prode.active { background: rgba(245,194,0,0.12); color: var(--amarillo-dim) !important; }
 	.logo-link {
 		display: flex;
 		align-items: center;

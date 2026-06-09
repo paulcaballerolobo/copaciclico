@@ -760,13 +760,15 @@
 		<!-- ── PRONÓSTICOS ABIERTOS ── -->
 		{#if openMatchesWithoutPrediction.length > 0}
 			<section class="prode-section">
-				<div class="section-hero-label">Cargá tus pronósticos</div>
-				<h2 class="section-title">Partidos abiertos</h2>
-				<p class="section-subtitle">Una vez confirmado no podés cambiarlo</p>
+				<div class="prode-open-header">
+					<div class="prode-open-header-label">Cargá tus pronósticos</div>
+					<h2 class="prode-open-header-title">Partidos abiertos</h2>
+					<p class="prode-open-header-sub">Una vez confirmado no podés cambiarlo</p>
+				</div>
 
 				<div class="prode-matches-list">
 					{#each openMatchesWithoutPrediction as match}
-						{@const form = getForm(match.id)}
+						{@const form = predictionForms[match.id] ?? { winner: '', home: '', away: '', submitting: false, submitted: false }}
 						<div class="prode-match-card card">
 							<div class="prode-match-head">
 								<span class="prode-phase-badge">{phaseLabel(match.phase)}{match.group_name ? ` · Grupo ${match.group_name}` : ''}</span>
@@ -1288,6 +1290,37 @@
 
 	/* ─── SECCIONES ─── */
 	.prode-section { display: flex; flex-direction: column; gap: 12px; }
+
+	.prode-open-header {
+		background: linear-gradient(135deg, #0d2a4a 0%, #0a1f3a 100%);
+		border: 1px solid rgba(91,155,213,0.25);
+		border-radius: 16px;
+		padding: 20px 24px;
+		display: flex;
+		flex-direction: column;
+		gap: 4px;
+	}
+	.prode-open-header-label {
+		font-family: 'Inter', monospace;
+		font-size: 11px;
+		font-weight: 700;
+		letter-spacing: 0.18em;
+		text-transform: uppercase;
+		color: var(--celeste, #5b9bd5);
+	}
+	.prode-open-header-title {
+		font-family: 'Inter', sans-serif;
+		font-size: 22px;
+		font-weight: 900;
+		letter-spacing: -0.03em;
+		color: #e8edf5;
+		margin: 0;
+	}
+	.prode-open-header-sub {
+		font-size: 13px;
+		color: rgba(232,237,245,0.55);
+		margin: 2px 0 0;
+	}
 
 	/* ─── TRIVIA ─── */
 	.prode-trivia-section {}
