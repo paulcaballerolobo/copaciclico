@@ -321,18 +321,18 @@
 	/* ── MATCH CARDS ── */
 	.match-list { display: flex; flex-direction: column; gap: 6px; }
 	.match-card {
-		background: rgba(91, 155, 213, 0.13);
-		border: 1px solid rgba(91, 155, 213, 0.22);
+		background: rgba(91, 155, 213, 0.32);
+		border: 1px solid rgba(91, 155, 213, 0.35);
 		border-radius: 10px;
 		padding: 14px 20px;
 		backdrop-filter: blur(6px);
 		transition: border-color 0.2s, background 0.2s;
 	}
 	.match-card.match-arg {
-		background: rgba(91, 155, 213, 0.2);
-		border-color: rgba(91, 155, 213, 0.45);
+		background: rgba(91, 155, 213, 0.45);
+		border-color: rgba(91, 155, 213, 0.6);
 	}
-	.match-card:hover { background: rgba(91, 155, 213, 0.2); }
+	.match-card:hover { background: rgba(91, 155, 213, 0.42); }
 
 	.mc-teams {
 		display: flex;
