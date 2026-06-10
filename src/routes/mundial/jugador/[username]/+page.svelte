@@ -228,17 +228,11 @@
 		// Conteo de trivias completadas
 		const { data: allTs } = await supabase
 			.from('trivia_sessions')
-			.select('id, phase')
+			.select('id')
 			.eq('user_id', user!.id)
 			.eq('status', 'completed');
 		triviaCompletedCount = (allTs ?? []).length;
-		// Total de semanas = unique phases across all sessions (completed or not)
-		const { data: allPhases } = await supabase
-			.from('trivia_sessions')
-			.select('phase')
-			.eq('user_id', user!.id);
-		const uniquePhases = new Set((allPhases ?? []).map(r => r.phase));
-		triviaWeekTotal = Math.max(uniquePhases.size, triviaCompletedCount);
+		triviaWeekTotal = currentWeek; // 1 trivia disponible por semana
 
 		// Intento de pozo
 		const { data: pa } = await supabase
@@ -681,7 +675,7 @@
 						<div class="prode-stat-label">ranking</div>
 					</div>
 				{/if}
-				{#if triviaCompletedCount > 0 || triviaWeekTotal > 0}
+				{#if triviaWeekTotal > 0}
 					<div class="prode-stat-divider"></div>
 					<div class="prode-stat" title="Trivias completadas">
 						<div class="prode-stat-value prode-stat-trivia">
