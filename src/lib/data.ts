@@ -661,11 +661,11 @@ export const MATCHES: Match[] = [
 	{ id: 'a6', group: 'A', date: '24 jun', time: '22:00', home: 'RSA', away: 'KOR', venue: 'Estadio BBVA, Monterrey' },
 	// Grupo B
 	{ id: 'b1', group: 'B', date: '12 jun', time: '16:00', home: 'CAN', away: 'BIH', venue: 'BMO Field, Toronto' },
-	{ id: 'b2', group: 'B', date: '13 jun', time: '19:00', home: 'QAT', away: 'SUI', venue: "Levi's Stadium, San Francisco" },
-	{ id: 'b3', group: 'B', date: '18 jun', time: '19:00', home: 'SUI', away: 'BIH', venue: 'SoFi Stadium, Los Ángeles' },
-	{ id: 'b4', group: 'B', date: '18 jun', time: '22:00', home: 'CAN', away: 'QAT', venue: 'BC Place, Vancouver' },
-	{ id: 'b5', group: 'B', date: '24 jun', time: '19:00', home: 'SUI', away: 'CAN', venue: 'BC Place, Vancouver' },
-	{ id: 'b6', group: 'B', date: '24 jun', time: '19:00', home: 'BIH', away: 'QAT', venue: 'Lumen Field, Seattle' },
+	{ id: 'b2', group: 'B', date: '13 jun', time: '16:00', home: 'QAT', away: 'SUI', venue: "Levi's Stadium, San Francisco" },
+	{ id: 'b3', group: 'B', date: '18 jun', time: '16:00', home: 'SUI', away: 'BIH', venue: 'SoFi Stadium, Los Ángeles' },
+	{ id: 'b4', group: 'B', date: '18 jun', time: '19:00', home: 'CAN', away: 'QAT', venue: 'BC Place, Vancouver' },
+	{ id: 'b5', group: 'B', date: '24 jun', time: '16:00', home: 'SUI', away: 'CAN', venue: 'BC Place, Vancouver' },
+	{ id: 'b6', group: 'B', date: '24 jun', time: '16:00', home: 'BIH', away: 'QAT', venue: 'Lumen Field, Seattle' },
 	// Grupo C
 	{ id: 'c1', group: 'C', date: '13 jun', time: '19:00', home: 'BRA', away: 'MAR', venue: 'MetLife Stadium, Nueva York' },
 	{ id: 'c2', group: 'C', date: '13 jun', time: '22:00', home: 'HAI', away: 'SCO', venue: 'Gillette Stadium, Boston' },
