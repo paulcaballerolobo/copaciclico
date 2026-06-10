@@ -266,16 +266,17 @@
 										: null}
 								{@const winnerName = winnerCode ? teamName(winnerCode) : 'Empate'}
 								{@const tone = CARD_TONES[i % CARD_TONES.length]}
+								{@const nameParts = pred.player_name.trim().split(' ')}
 
 								<!-- La card entra con bounce; sus elementos hacen fade L→R después -->
 								<div
 									class="tv-card"
 									class:tv-card-correct={isKnown && pred.is_correct}
 									class:tv-card-wrong={isKnown && !pred.is_correct}
-									style="--card-delay: {i * 0.18}s; --card-bg: {tone.bg}; --card-border: {tone.border}"
+									style="--card-delay: {i * 2}s; --card-bg: {tone.bg}; --card-border: {tone.border}"
 								>
-									<!-- Avatar: fade 0.1s después del bounce -->
-									<div class="tv-card-avatar tv-el tv-el-0" style="--el-delay: {i * 0.18 + 0.45}s">
+									<!-- Avatar -->
+									<div class="tv-card-avatar tv-el tv-el-0" style="--el-delay: {i * 2 + 2}s">
 										{#if pred.avatar_url}
 											<img src={pred.avatar_url} alt={pred.player_name} class="tv-avatar-img" />
 										{:else}
@@ -287,18 +288,24 @@
 
 									<!-- Zona central: toma el espacio disponible, overflow hidden -->
 									<div class="tv-card-mid">
-										<span class="tv-card-name tv-el tv-el-1" style="--el-delay: {i * 0.18 + 0.55}s">{pred.player_name}</span>
-										<span class="tv-card-sep tv-el tv-el-2" style="--el-delay: {i * 0.18 + 0.62}s">·</span>
-										<span class="tv-pred-winner tv-el tv-el-3" style="--el-delay: {i * 0.18 + 0.69}s">{winnerName}</span>
+										<!-- Nombre arriba / Apellido abajo -->
+										<div class="tv-card-name tv-el tv-el-1" style="--el-delay: {i * 2 + 2.1}s">
+											<span class="tv-name-first">{nameParts[0]}</span>
+											{#if nameParts.length > 1}
+												<span class="tv-name-last">{nameParts.slice(1).join(' ')}</span>
+											{/if}
+										</div>
+										<span class="tv-card-sep tv-el tv-el-2" style="--el-delay: {i * 2 + 2.2}s">·</span>
+										<span class="tv-pred-winner tv-el tv-el-3" style="--el-delay: {i * 2 + 2.3}s">{winnerName}</span>
 										{#if pred.has_exact_score}
-											<span class="tv-pred-score tv-el tv-el-4" style="--el-delay: {i * 0.18 + 0.76}s">{pred.predicted_home} – {pred.predicted_away}</span>
+											<span class="tv-pred-score tv-el tv-el-4" style="--el-delay: {i * 2 + 2.4}s">{pred.predicted_home} – {pred.predicted_away}</span>
 										{:else}
-											<span class="tv-pred-noscore tv-el tv-el-4" style="--el-delay: {i * 0.18 + 0.76}s">SIN MARCADOR</span>
+											<span class="tv-pred-noscore tv-el tv-el-4" style="--el-delay: {i * 2 + 2.4}s">SIN MARCADOR</span>
 										{/if}
 									</div>
 
 									<!-- Puntos: ancho fijo a la derecha -->
-									<div class="tv-card-pts tv-el tv-el-5" style="--el-delay: {i * 0.18 + 0.85}s">
+									<div class="tv-card-pts tv-el tv-el-5" style="--el-delay: {i * 2 + 2.5}s">
 										{#if isKnown}
 											<span class="tv-pts-num" class:pos={pred.points_earned! > 0} class:neg={pred.points_earned! < 0}>
 												{pred.points_earned! > 0 ? '+' : ''}{pred.points_earned}
@@ -350,7 +357,9 @@
 	/* ── Fondo con imagen al 10% de opacidad ── */
 	.tv-bg-img {
 		position: fixed; inset: 0; z-index: 0;
-		background: url('/background.png') center center / cover no-repeat;
+		background-image: url('/background.png');
+		background-size: cover;
+		background-position: center;
 		opacity: 0.08;
 	}
 	/* Capa degradada azul-negra encima */
@@ -546,7 +555,7 @@
 	/* ── Cards ── */
 	.tv-cards-col {
 		display: flex; flex-direction: column; gap: 10px;
-		width: 50%;
+		width: 80%;
 		min-width: 380px;
 	}
 
@@ -571,7 +580,7 @@
 		display: flex;
 		align-items: center;
 		gap: 12px;
-		padding: 11px 16px;
+		padding: 1px 16px;
 		transition: box-shadow 0.18s;
 		min-width: 0;
 		overflow: hidden;
@@ -622,13 +631,24 @@
 
 	/* Elementos en línea */
 	.tv-card-name {
+		display: flex; flex-direction: column; gap: 0;
+		flex: 0 1 14ch;
+		min-width: 60px;
+		overflow: hidden;
+	}
+	.tv-name-first {
 		font-family: 'Inter', sans-serif;
 		font-size: clamp(12px, 1.1vw, 15px); font-weight: 800;
 		color: #0a1e50;
-		white-space: nowrap;
-		overflow: hidden; text-overflow: ellipsis;
-		flex: 0 1 14ch;
-		min-width: 60px;
+		white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+		line-height: 1.2;
+	}
+	.tv-name-last {
+		font-family: 'Inter', sans-serif;
+		font-size: clamp(10px, 0.9vw, 12px); font-weight: 600;
+		color: #3a5a9a;
+		white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+		line-height: 1.2;
 	}
 	.tv-card-sep { color: rgba(10,30,80,0.25); font-size: 13px; flex-shrink: 0; }
 	.tv-pred-winner {
