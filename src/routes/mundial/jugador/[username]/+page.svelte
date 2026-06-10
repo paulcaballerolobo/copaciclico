@@ -187,27 +187,38 @@
 
 		// Refrescar puntos y ranking desde la DB
 		if (isRehearsalMode) {
-			// En ensayo, puntos vienen de predictions, ranking se recalcula
-			const { data: predPoints } = await supabase
-				.from('predictions')
-				.select('user_id, points_earned')
-				.eq('is_rehearsal', true)
-				.not('points_earned', 'is', null);
 			const { data: allUsers } = await supabase
-				.from('users')
-				.select('id, points_total')
-				.eq('is_active', true)
-				.eq('is_admin', false);
-			if (predPoints && allUsers) {
-				const byUser: Record<string, number> = {};
-				for (const p of predPoints as { user_id: string; points_earned: number }[]) {
-					byUser[p.user_id] = (byUser[p.user_id] ?? 0) + (p.points_earned ?? 0);
-				}
+				.from('users').select('id').eq('is_active', true).eq('is_admin', false);
+
+			const byUser: Record<string, number> = {};
+
+			// Pronósticos
+			const { data: predPoints } = await supabase
+				.from('predictions').select('user_id, points_earned')
+				.eq('is_rehearsal', true).not('points_earned', 'is', null);
+			for (const p of (predPoints ?? []) as { user_id: string; points_earned: number }[])
+				byUser[p.user_id] = (byUser[p.user_id] ?? 0) + (p.points_earned ?? 0);
+
+			// Trivias
+			const { data: triviaPoints } = await supabase
+				.from('trivia_sessions').select('user_id, points_earned')
+				.eq('is_rehearsal', true).eq('status', 'completed').not('points_earned', 'is', null);
+			for (const t of (triviaPoints ?? []) as { user_id: string; points_earned: number }[])
+				byUser[t.user_id] = (byUser[t.user_id] ?? 0) + (t.points_earned ?? 0);
+
+			// Pozo
+			const { data: pozoPoints } = await supabase
+				.from('pozo_attempts').select('user_id, points_received')
+				.eq('status', 'won').not('points_received', 'is', null);
+			for (const z of (pozoPoints ?? []) as { user_id: string; points_received: number }[])
+				byUser[z.user_id] = (byUser[z.user_id] ?? 0) + (z.points_received ?? 0);
+
+			if (allUsers) {
 				const myPoints = byUser[user.id] ?? 0;
-				const ranking = [...allUsers]
+				const rankList = [...allUsers]
 					.map(u => ({ id: u.id, pts: byUser[u.id] ?? 0 }))
 					.sort((a, b) => b.pts - a.pts);
-				const myRank = ranking.findIndex(u => u.id === user!.id) + 1;
+				const myRank = rankList.findIndex(u => u.id === user!.id) + 1;
 				user = { ...user, points_total: myPoints, ranking_position: myRank };
 				localStorage.setItem('mundial_user', JSON.stringify(user));
 			}

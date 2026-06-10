@@ -104,6 +104,36 @@
 		} catch { userIp = ''; }
 	}
 
+	async function applyRehearsalPoints(players: Player[]): Promise<Player[]> {
+		const byUser: Record<string, number> = {};
+
+		// Pronósticos
+		const { data: predPoints } = await supabase
+			.from('predictions').select('user_id, points_earned')
+			.eq('is_rehearsal', true).not('points_earned', 'is', null);
+		for (const p of (predPoints ?? []) as { user_id: string; points_earned: number }[])
+			byUser[p.user_id] = (byUser[p.user_id] ?? 0) + (p.points_earned ?? 0);
+
+		// Trivias
+		const { data: triviaPoints } = await supabase
+			.from('trivia_sessions').select('user_id, points_earned')
+			.eq('is_rehearsal', true).eq('status', 'completed').not('points_earned', 'is', null);
+		for (const t of (triviaPoints ?? []) as { user_id: string; points_earned: number }[])
+			byUser[t.user_id] = (byUser[t.user_id] ?? 0) + (t.points_earned ?? 0);
+
+		// Pozo (no tiene flag de ensayo, solo suma si ganó)
+		const { data: pozoPoints } = await supabase
+			.from('pozo_attempts').select('user_id, points_received')
+			.eq('status', 'won').not('points_received', 'is', null);
+		for (const z of (pozoPoints ?? []) as { user_id: string; points_received: number }[])
+			byUser[z.user_id] = (byUser[z.user_id] ?? 0) + (z.points_received ?? 0);
+
+		return players
+			.map(pl => ({ ...pl, points_total: byUser[pl.id] ?? 0 }))
+			.sort((a, b) => b.points_total - a.points_total)
+			.map((pl, i) => ({ ...pl, ranking_position: i + 1 }));
+	}
+
 	function computeDeltas(newRanking: Player[]) {
 		const snapshotRaw = localStorage.getItem(POSITION_SNAPSHOT_KEY);
 		const snapshot: Record<string, number> = snapshotRaw ? JSON.parse(snapshotRaw) : {};
@@ -147,23 +177,9 @@
 		let rawRanking = (users ?? []) as Player[];
 
 		// En modo ensayo los puntos no se escriben en users.points_total,
-		// así que los calculamos en tiempo real desde predictions.
+		// así que los calculamos en tiempo real desde todas las fuentes.
 		if (isRehearsalMode && rawRanking.length > 0) {
-			const { data: predPoints } = await supabase
-				.from('predictions')
-				.select('user_id, points_earned')
-				.eq('is_rehearsal', true)
-				.not('points_earned', 'is', null);
-			if (predPoints) {
-				const byUser: Record<string, number> = {};
-				for (const p of predPoints as { user_id: string; points_earned: number }[]) {
-					byUser[p.user_id] = (byUser[p.user_id] ?? 0) + (p.points_earned ?? 0);
-				}
-				rawRanking = rawRanking
-					.map(pl => ({ ...pl, points_total: byUser[pl.id] ?? 0 }))
-					.sort((a, b) => b.points_total - a.points_total)
-					.map((pl, i) => ({ ...pl, ranking_position: i + 1 }));
-			}
+			rawRanking = await applyRehearsalPoints(rawRanking);
 		}
 
 		computeDeltas(rawRanking);
@@ -286,21 +302,7 @@
 		let newRanking = (data ?? []) as Player[];
 
 		if (isRehearsalMode && newRanking.length > 0) {
-			const { data: predPoints } = await supabase
-				.from('predictions')
-				.select('user_id, points_earned')
-				.eq('is_rehearsal', true)
-				.not('points_earned', 'is', null);
-			if (predPoints) {
-				const byUser: Record<string, number> = {};
-				for (const p of predPoints as { user_id: string; points_earned: number }[]) {
-					byUser[p.user_id] = (byUser[p.user_id] ?? 0) + (p.points_earned ?? 0);
-				}
-				newRanking = newRanking
-					.map(pl => ({ ...pl, points_total: byUser[pl.id] ?? 0 }))
-					.sort((a, b) => b.points_total - a.points_total)
-					.map((pl, i) => ({ ...pl, ranking_position: i + 1 }));
-			}
+			newRanking = await applyRehearsalPoints(newRanking);
 		}
 
 		computeDeltas(newRanking);
