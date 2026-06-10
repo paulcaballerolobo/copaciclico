@@ -106,6 +106,10 @@
 	let loading = true;
 	let section: 'login' | 'main' = 'login';
 
+	// Trivia count
+	let triviaCompletedCount = 0;
+	let triviaWeekTotal = 0;
+
 	// Trivia state
 	let triviaPhase: 'idle' | 'countdown' | 'question' | 'reveal' | 'done' = 'idle';
 	let triviaQuestions: TriviaQuestion[] = [];
@@ -220,6 +224,21 @@
 			.in('status', ['ready', 'in_progress'])
 			.maybeSingle();
 		triviaSession = ts as TriviaSession | null;
+
+		// Conteo de trivias completadas
+		const { data: allTs } = await supabase
+			.from('trivia_sessions')
+			.select('id, phase')
+			.eq('user_id', user!.id)
+			.eq('status', 'completed');
+		triviaCompletedCount = (allTs ?? []).length;
+		// Total de semanas = unique phases across all sessions (completed or not)
+		const { data: allPhases } = await supabase
+			.from('trivia_sessions')
+			.select('phase')
+			.eq('user_id', user!.id);
+		const uniquePhases = new Set((allPhases ?? []).map(r => r.phase));
+		triviaWeekTotal = Math.max(uniquePhases.size, triviaCompletedCount);
 
 		// Intento de pozo
 		const { data: pa } = await supabase
@@ -660,6 +679,15 @@
 					<div class="prode-stat">
 						<div class="prode-stat-value">#{user.ranking_position}</div>
 						<div class="prode-stat-label">ranking</div>
+					</div>
+				{/if}
+				{#if triviaCompletedCount > 0 || triviaWeekTotal > 0}
+					<div class="prode-stat-divider"></div>
+					<div class="prode-stat" title="Trivias completadas">
+						<div class="prode-stat-value prode-stat-trivia">
+							{triviaCompletedCount}<span class="prode-stat-trivia-total">/{triviaWeekTotal > 0 ? triviaWeekTotal : '?'}</span>
+						</div>
+						<div class="prode-stat-label">trivias</div>
 					</div>
 				{/if}
 				<div class="prode-stat-divider"></div>
@@ -1299,6 +1327,11 @@
 		letter-spacing: 0.1em;
 		text-transform: uppercase;
 		color: var(--muted);
+	}
+	.prode-stat-trivia-total {
+		font-size: 13px;
+		font-weight: 400;
+		opacity: 0.55;
 	}
 	.prode-stat-divider {
 		width: 1px;

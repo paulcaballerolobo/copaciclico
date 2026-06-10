@@ -641,11 +641,13 @@
 			const questionIds = shuffled.slice(0, 5);
 
 			// Consultar Supabase directamente (no confiar en el estado en memoria)
+			// Fase = semana actual (1 trivia por semana)
+			const weekPhase = `week_${currentWeek}`;
 			const { data: existing } = await supabase
 				.from('trivia_sessions')
 				.select('id')
 				.eq('user_id', userId)
-				.eq('phase', currentPhase)
+				.eq('phase', weekPhase)
 				.maybeSingle();
 
 			if (existing) {
@@ -666,7 +668,7 @@
 				// No existe → INSERT
 				const { error } = await supabase.from('trivia_sessions').insert({
 					user_id: userId,
-					phase: currentPhase,
+					phase: weekPhase,
 					level_chosen: 2,
 					question_ids: questionIds,
 					answers: [],
@@ -756,40 +758,48 @@
 	});
 	onDestroy(() => { if (tickInterval) clearInterval(tickInterval); });
 
-	// Estado del botón "Activar trivia" para cada jugador
-	// Devuelve { disabled, label, variant }
+	// ── Conteo de trivias por jugador ───────────────────────────
+	function triviaCountForUser(userId: string): { done: number; total: number } {
+		const done = triviaSessions.filter((s) => s.user_id === userId && s.status === 'completed').length;
+		const total = weeks.length; // 1 trivia disponible por semana
+		return { done, total };
+	}
+
+	// ── Estado del botón "Activar trivia" ────────────────────────
 	function triviaBtnState(userId: string, _now: number): {
 		disabled: boolean;
 		label: string;
-		variant: 'default' | 'waiting' | 'live' | 'done';
+		variant: 'default' | 'activated' | 'activated-live';
 	} {
-		const s = triviaSessions.find((ts) => ts.user_id === userId);
-		if (!s) return { disabled: false, label: 'Activar trivia', variant: 'default' };
+		// Buscar sesión activa de esta semana
+		const weekPhase = `week_${currentWeek}`;
+		const active = triviaSessions.find(
+			(s) => s.user_id === userId && (s.status === 'ready' || s.status === 'in_progress')
+		);
 
-		if (s.status === 'ready') {
-			// Habilitada pero el jugador no arrancó — mostrar tiempo transcurrido
-			const elapsed = s.enabled_at ? Math.floor((_now - new Date(s.enabled_at).getTime()) / 1000) : 0;
+		if (!active) {
+			return { disabled: false, label: 'Activar trivia', variant: 'default' };
+		}
+
+		if (active.status === 'ready') {
+			const elapsed = active.enabled_at
+				? Math.floor((_now - new Date(active.enabled_at).getTime()) / 1000) : 0;
 			const mm = Math.floor(elapsed / 60).toString().padStart(2, '0');
 			const ss = (elapsed % 60).toString().padStart(2, '0');
-			return { disabled: true, label: `⏳ Esperando… ${mm}:${ss}`, variant: 'waiting' };
+			return { disabled: true, label: `Trivia activada — ⏳ ${mm}:${ss}`, variant: 'activated' };
 		}
 
-		if (s.status === 'in_progress') {
-			// Calculamos cuánto tiempo MAX queda: n_preguntas × 20 s por pregunta
-			const totalSecs = (s.question_ids?.length ?? 5) * 20;
-			const startedMs = s.started_at ? new Date(s.started_at).getTime() : _now;
-			const remaining = Math.max(0, totalSecs - Math.floor((_now - startedMs) / 1000));
-			const mm = Math.floor(remaining / 60).toString().padStart(2, '0');
-			const ss = (remaining % 60).toString().padStart(2, '0');
-			return { disabled: true, label: `🔴 En juego  ${mm}:${ss}`, variant: 'live' };
-		}
-
-		if (s.status === 'completed') {
-			return { disabled: false, label: `↺ Volver a activar (${s.score}/${s.question_ids?.length ?? 5})`, variant: 'done' };
-		}
-
-		return { disabled: false, label: 'Activar trivia', variant: 'default' };
+		// in_progress
+		const totalSecs = (active.question_ids?.length ?? 5) * 20;
+		const startedMs = active.started_at ? new Date(active.started_at).getTime() : _now;
+		const remaining = Math.max(0, totalSecs - Math.floor((_now - startedMs) / 1000));
+		const mm = Math.floor(remaining / 60).toString().padStart(2, '0');
+		const ss = (remaining % 60).toString().padStart(2, '0');
+		return { disabled: true, label: `Trivia activada — 🔴 ${mm}:${ss}`, variant: 'activated-live' };
 	}
+
+	// suprimir el linter — weekPhase se calcula dentro de la función
+	$: _weekPhase = `week_${currentWeek}`;
 
 	// ─── HELPERS ──────────────────────────────────────────────────
 	function triviaStatusForUser(userId: string): string {
@@ -1302,16 +1312,24 @@
 				<div class="admin-subsection">
 					<h3 class="admin-subsection-title">Estado por jugador</h3>
 					<div class="admin-players-table">
-						<div class="admin-players-header">
+						<div class="admin-players-header admin-trivia-header">
 							<span>Jugador</span>
-							<span>Estado trivia</span>
+							<span>Trivias</span>
+							<span>Estado</span>
 							<span>Acción</span>
 						</div>
 						{#each players.filter(p => !p.is_admin) as player}
 							{@const btn = triviaBtnState(player.id, now)}
 							{@const loading = enablingTrivia.has(player.id)}
+							{@const count = triviaCountForUser(player.id)}
 							<div class="admin-trivia-row">
 								<span class="admin-trivia-name">{player.full_name}</span>
+								<span class="admin-trivia-count">
+									<span class="admin-trivia-count-done">{count.done}</span>
+									<span class="admin-trivia-count-sep">/</span>
+									<span class="admin-trivia-count-total">{count.total}</span>
+									<span class="admin-trivia-count-label">sem.</span>
+								</span>
 								<span class="mono admin-trivia-status">{triviaStatusForUser(player.id)}</span>
 								<button
 									class="admin-trivia-btn admin-trivia-btn-{loading ? 'loading' : btn.variant}"
@@ -1871,9 +1889,10 @@
 	.admin-btn-danger-mini:hover { border-color: var(--red); color: var(--red); }
 
 	/* ── Fila trivia: grid propio (no reutiliza el de jugadores que tiene 7 cols) ── */
+	.admin-trivia-header { grid-template-columns: 1fr 90px 1fr auto !important; }
 	.admin-trivia-row {
 		display: grid;
-		grid-template-columns: 1fr 1fr auto;
+		grid-template-columns: 1fr 90px 1fr auto;
 		gap: 12px;
 		align-items: center;
 		padding: 11px 16px;
@@ -1884,6 +1903,17 @@
 	.admin-trivia-row:hover { background: rgba(91,155,213,0.02); }
 	.admin-trivia-name { font-weight: 500; }
 	.admin-trivia-status { font-family: 'DM Mono', monospace; font-size: 12px; color: var(--muted); }
+	.admin-trivia-count {
+		display: flex;
+		align-items: baseline;
+		gap: 2px;
+		font-family: 'DM Mono', monospace;
+		font-size: 12px;
+	}
+	.admin-trivia-count-done { font-size: 15px; font-weight: 700; color: var(--celeste); }
+	.admin-trivia-count-sep { color: var(--muted); }
+	.admin-trivia-count-total { color: var(--muted); }
+	.admin-trivia-count-label { font-size: 10px; color: var(--muted); margin-left: 3px; }
 
 	/* ── Botón Activar Trivia — variantes de estado ── */
 	.admin-trivia-btn {
@@ -1908,19 +1938,18 @@
 		background: rgba(91,155,213,0.18);
 		border-color: var(--celeste);
 	}
-	/* waiting: habilitada, esperando que el jugador arranque */
-	.admin-trivia-btn-waiting {
-		background: rgba(245,194,0,0.1);
-		border-color: rgba(245,194,0,0.4);
-		color: #b8940a;
+	/* activated: trivia habilitada (ready o in_progress), fondo blanco + fuente negra */
+	.admin-trivia-btn-activated {
+		background: #ffffff;
+		border-color: #e0e0e0;
+		color: #111111;
 		cursor: not-allowed;
-		opacity: 0.9;
 	}
-	/* live: jugador respondiendo en este momento */
-	.admin-trivia-btn-live {
-		background: rgba(217,48,37,0.1);
-		border-color: rgba(217,48,37,0.5);
-		color: var(--red);
+	/* activated-live: jugador respondiendo ahora mismo — igual pero con pulso */
+	.admin-trivia-btn-activated-live {
+		background: #ffffff;
+		border-color: #e0e0e0;
+		color: #111111;
 		cursor: not-allowed;
 		animation: triviaLivePulse 1.8s ease-in-out infinite;
 	}
