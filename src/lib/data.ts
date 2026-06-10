@@ -672,14 +672,14 @@ export const MATCHES: Match[] = [
 	{ id: 'c3', group: 'C', date: '19 jun', time: '19:00', home: 'SCO', away: 'MAR', venue: 'Gillette Stadium, Boston' },
 	{ id: 'c4', group: 'C', date: '19 jun', time: '22:00', home: 'BRA', away: 'HAI', venue: 'Lincoln Financial Field, Filadelfia' },
 	{ id: 'c5', group: 'C', date: '24 jun', time: '19:00', home: 'SCO', away: 'BRA', venue: 'Hard Rock Stadium, Miami' },
-	{ id: 'c6', group: 'C', date: '24 jun', time: '19:00', home: 'MAR', away: 'HAI', venue: 'Mercedes-Benz Stadium, Atlanta' },
+	{ id: 'c6', group: 'C', date: '26 jun', time: '19:00', home: 'MAR', away: 'HAI', venue: 'Mercedes-Benz Stadium, Atlanta' },
 	// Grupo J — Argentina
-	{ id: 'j1', group: 'J', date: '16 jun', time: '23:00', home: 'ARG', away: 'ALG', venue: 'Arrowhead Stadium, Kansas City', arge: true },
-	{ id: 'j2', group: 'J', date: '17 jun', time: '04:00', home: 'AUT', away: 'JOR', venue: "Levi's Stadium, San Francisco" },
-	{ id: 'j3', group: 'J', date: '22 jun', time: '15:00', home: 'ARG', away: 'AUT', venue: 'AT&T Stadium, Dallas', arge: true },
-	{ id: 'j4', group: 'J', date: '23 jun', time: '03:00', home: 'JOR', away: 'ALG', venue: "Levi's Stadium, San Francisco" },
-	{ id: 'j5', group: 'J', date: '28 jun', time: '00:00', home: 'ALG', away: 'AUT', venue: 'Arrowhead Stadium, Kansas City' },
-	{ id: 'j6', group: 'J', date: '28 jun', time: '00:00', home: 'JOR', away: 'ARG', venue: 'AT&T Stadium, Dallas', arge: true }
+	{ id: 'j1', group: 'J', date: '16 jun', time: '22:00', home: 'ARG', away: 'ALG', venue: 'Arrowhead Stadium, Kansas City', arge: true },
+	{ id: 'j2', group: 'J', date: '16 jun', time: '02:00', home: 'AUT', away: 'JOR', venue: "Levi's Stadium, San Francisco" },
+	{ id: 'j3', group: 'J', date: '22 jun', time: '14:00', home: 'ARG', away: 'AUT', venue: 'AT&T Stadium, Dallas', arge: true },
+	{ id: 'j4', group: 'J', date: '23 jun', time: '01:00', home: 'JOR', away: 'ALG', venue: "Levi's Stadium, San Francisco" },
+	{ id: 'j5', group: 'J', date: '27 jun', time: '23:00', home: 'ALG', away: 'AUT', venue: 'Arrowhead Stadium, Kansas City' },
+	{ id: 'j6', group: 'J', date: '27 jun', time: '23:00', home: 'JOR', away: 'ARG', venue: 'AT&T Stadium, Dallas', arge: true }
 ];
 
 export const STATS_DATA: StatCard[] = [
