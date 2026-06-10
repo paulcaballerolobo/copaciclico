@@ -337,16 +337,16 @@
 	.mc-teams {
 		display: flex;
 		align-items: center;
-		justify-content: center;
-		gap: 16px;
 		margin-bottom: 7px;
 	}
 	.mc-team {
+		flex: 1;
 		display: flex;
 		align-items: center;
-		gap: 8px;
+		gap: 10px;
 	}
-	.mc-away { flex-direction: row; }
+	.mc-home { justify-content: flex-end; }
+	.mc-away { justify-content: flex-start; flex-direction: row; }
 	.mc-flag { font-size: 22px; flex-shrink: 0; }
 	.mc-team-info { display: flex; flex-direction: column; align-items: center; }
 	.mc-team-info-right { align-items: center; }
@@ -369,6 +369,8 @@
 		font-size: 10px;
 		color: rgba(255,255,255,0.3);
 		flex-shrink: 0;
+		width: 32px;
+		text-align: center;
 	}
 
 	.mc-meta {
