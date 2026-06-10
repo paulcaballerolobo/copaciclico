@@ -321,18 +321,18 @@
 	/* ── MATCH CARDS ── */
 	.match-list { display: flex; flex-direction: column; gap: 6px; }
 	.match-card {
-		background: rgba(91, 155, 213, 0.32);
-		border: 1px solid rgba(91, 155, 213, 0.35);
+		background: rgba(91, 155, 213, 0.52);
+		border: 1px solid rgba(91, 155, 213, 0.45);
 		border-radius: 10px;
 		padding: 14px 20px;
 		backdrop-filter: blur(6px);
 		transition: border-color 0.2s, background 0.2s;
 	}
 	.match-card.match-arg {
-		background: rgba(91, 155, 213, 0.45);
-		border-color: rgba(91, 155, 213, 0.6);
+		background: rgba(91, 155, 213, 0.65);
+		border-color: rgba(91, 155, 213, 0.75);
 	}
-	.match-card:hover { background: rgba(91, 155, 213, 0.42); }
+	.match-card:hover { background: rgba(91, 155, 213, 0.62); }
 
 	.mc-teams {
 		display: flex;
@@ -348,8 +348,8 @@
 	}
 	.mc-away { flex-direction: row; }
 	.mc-flag { font-size: 22px; flex-shrink: 0; }
-	.mc-team-info { display: flex; flex-direction: column; }
-	.mc-team-info-right { align-items: flex-end; }
+	.mc-team-info { display: flex; flex-direction: column; align-items: center; }
+	.mc-team-info-right { align-items: center; }
 	.mc-code {
 		font-family: 'Inter', sans-serif;
 		font-size: 15px;
