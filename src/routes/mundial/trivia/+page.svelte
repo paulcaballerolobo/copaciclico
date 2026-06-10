@@ -159,9 +159,9 @@
 				async (payload) => {
 					const updated = payload.new as TriviaSession;
 					if (!updated) return;
-					// Nueva sesión (INSERT) o sesión distinta activada → resetear juego
 					const isNewSession = !triviaSession || updated.id !== triviaSession.id;
 					triviaSession = updated;
+
 					if (updated.status === 'ready' && (loadingState === 'no-session' || isNewSession)) {
 						if (updated.question_ids?.length) await loadQuestions(updated.question_ids);
 						loadingState = 'ready';
@@ -169,6 +169,28 @@
 						currentIdx = 0;
 						correctCount = 0;
 						selectedAnswer = null;
+						if (timerInterval) clearInterval(timerInterval);
+					} else if (updated.status === 'in_progress') {
+						if (isNewSession && updated.question_ids?.length) await loadQuestions(updated.question_ids);
+						loadingState = 'ready';
+						const answered = updated.answers?.length ?? 0;
+						correctCount = updated.answers?.filter((a) => a.correct).length ?? 0;
+						if (answered >= updated.question_ids.length) {
+							gamePhase = 'done';
+							if (timerInterval) clearInterval(timerInterval);
+						} else {
+							const newIdx = answered;
+							if (newIdx !== currentIdx || gamePhase !== 'question') {
+								currentIdx = newIdx;
+								selectedAnswer = null;
+								gamePhase = 'question';
+								if (!isOwner) { if (timerInterval) clearInterval(timerInterval); }
+								else startTimer();
+							}
+						}
+					} else if (updated.status === 'completed') {
+						correctCount = updated.score ?? 0;
+						gamePhase = 'done';
 						if (timerInterval) clearInterval(timerInterval);
 					}
 				}

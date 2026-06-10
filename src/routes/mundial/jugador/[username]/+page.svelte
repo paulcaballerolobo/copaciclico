@@ -1457,36 +1457,6 @@
 	}
 
 	/* ─── TRIVIA ─── */
-	.prode-trivia-section {}
-
-	/* Botón rojo "Ir a la Trivia" */
-	.prode-btn-trivia-go {
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		gap: 8px;
-		width: 100%;
-		padding: 16px;
-		border-radius: 12px;
-		background: var(--red, #D93025);
-		color: white;
-		font-family: 'Inter', sans-serif;
-		font-size: 16px;
-		font-weight: 800;
-		text-decoration: none;
-		letter-spacing: 0.01em;
-		margin-bottom: 12px;
-		transition: all 0.2s;
-		animation: triviaGlow 2s ease-in-out infinite;
-	}
-	.prode-btn-trivia-go:hover {
-		background: #b02820;
-		transform: translateY(-1px);
-	}
-	@keyframes triviaGlow {
-		0%, 100% { box-shadow: 0 0 0 0 rgba(217,48,37,0); }
-		50% { box-shadow: 0 0 16px 4px rgba(217,48,37,0.35); }
-	}
 	.prode-trivia-ready {
 		display: flex;
 		flex-direction: column;
