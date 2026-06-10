@@ -233,8 +233,7 @@
 		const { data: qs } = await supabase.from('trivia_questions').select('*').order('created_at');
 		triviaQuestions = (qs ?? []) as TriviaQuestion[];
 
-		const { data: ts, error: tsErr } = await supabase.from('trivia_sessions').select('*').order('created_at', { ascending: false });
-		console.log('[loadTrivia] sessions:', ts?.length, 'error:', tsErr?.message);
+		const { data: ts } = await supabase.from('trivia_sessions').select('*').order('created_at', { ascending: false });
 		triviaSessions = (ts ?? []) as TriviaSession[];
 	}
 
