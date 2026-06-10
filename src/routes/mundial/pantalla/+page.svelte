@@ -273,10 +273,10 @@
 									class="tv-card"
 									class:tv-card-correct={isKnown && pred.is_correct}
 									class:tv-card-wrong={isKnown && !pred.is_correct}
-									style="--card-delay: {i * 2}s; --card-bg: {tone.bg}; --card-border: {tone.border}"
+									style="--card-delay: {i * 1.5}s; --card-bg: {tone.bg}; --card-border: {tone.border}"
 								>
 									<!-- Avatar -->
-									<div class="tv-card-avatar tv-el tv-el-0" style="--el-delay: {i * 2 + 2}s">
+									<div class="tv-card-avatar tv-el tv-el-0" style="--el-delay: {i * 1.5 + 1.5}s">
 										{#if pred.avatar_url}
 											<img src={pred.avatar_url} alt={pred.player_name} class="tv-avatar-img" />
 										{:else}
@@ -289,23 +289,23 @@
 									<!-- Zona central: toma el espacio disponible, overflow hidden -->
 									<div class="tv-card-mid">
 										<!-- Nombre arriba / Apellido abajo -->
-										<div class="tv-card-name tv-el tv-el-1" style="--el-delay: {i * 2 + 2.1}s">
+										<div class="tv-card-name tv-el tv-el-1" style="--el-delay: {i * 1.5 + 1.6}s">
 											<span class="tv-name-first">{nameParts[0]}</span>
 											{#if nameParts.length > 1}
 												<span class="tv-name-last">{nameParts.slice(1).join(' ')}</span>
 											{/if}
 										</div>
-										<span class="tv-card-sep tv-el tv-el-2" style="--el-delay: {i * 2 + 2.2}s">·</span>
-										<span class="tv-pred-winner tv-el tv-el-3" style="--el-delay: {i * 2 + 2.3}s">{winnerName}</span>
+										<span class="tv-card-sep tv-el tv-el-2" style="--el-delay: {i * 1.5 + 1.7}s">·</span>
+										<span class="tv-pred-winner tv-el tv-el-3" style="--el-delay: {i * 1.5 + 1.8}s">{winnerName}</span>
 										{#if pred.has_exact_score}
-											<span class="tv-pred-score tv-el tv-el-4" style="--el-delay: {i * 2 + 2.4}s">{pred.predicted_home} – {pred.predicted_away}</span>
+											<span class="tv-pred-score tv-el tv-el-4" style="--el-delay: {i * 1.5 + 1.9}s">{pred.predicted_home} – {pred.predicted_away}</span>
 										{:else}
-											<span class="tv-pred-noscore tv-el tv-el-4" style="--el-delay: {i * 2 + 2.4}s">SIN MARCADOR</span>
+											<span class="tv-pred-noscore tv-el tv-el-4" style="--el-delay: {i * 1.5 + 1.9}s">SIN MARCADOR</span>
 										{/if}
 									</div>
 
 									<!-- Puntos: ancho fijo a la derecha -->
-									<div class="tv-card-pts tv-el tv-el-5" style="--el-delay: {i * 2 + 2.5}s">
+									<div class="tv-card-pts tv-el tv-el-5" style="--el-delay: {i * 1.5 + 2}s">
 										{#if isKnown}
 											<span class="tv-pts-num" class:pos={pred.points_earned! > 0} class:neg={pred.points_earned! < 0}>
 												{pred.points_earned! > 0 ? '+' : ''}{pred.points_earned}
@@ -354,22 +354,15 @@
 		color: #fff;
 	}
 
-	/* ── Fondo con imagen al 10% de opacidad ── */
-	.tv-bg-img {
-		position: fixed; inset: 0; z-index: 0;
-		background-image: url('/background.png');
-		background-size: cover;
-		background-position: center;
-		opacity: 0.08;
-	}
-	/* Capa degradada azul-negra encima */
+	/* Fondo sólido — background.png eliminado por peso (4MB) */
+	.tv-bg-img { display: none; }
 	.tv-bg-overlay {
 		position: fixed; inset: 0; z-index: 1;
 		background: linear-gradient(
 			160deg,
-			rgba(3,10,30,0.92) 0%,
-			rgba(6,20,60,0.82) 45%,
-			rgba(2,8,25,0.94) 100%
+			#03091e 0%,
+			#06143c 45%,
+			#020819 100%
 		);
 	}
 
@@ -557,6 +550,8 @@
 		display: flex; flex-direction: column; gap: 10px;
 		width: 80%;
 		min-width: 380px;
+		/* alinea la primera card con el inicio de la match card en la sidebar */
+		margin-top: 108px;
 	}
 
 	/* Card bounce al entrar */
@@ -574,6 +569,7 @@
 	.tv-card {
 		opacity: 0;
 		animation: card-enter 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) var(--card-delay, 0s) forwards;
+		will-change: transform, opacity;
 		border-radius: 14px;
 		border: 1px solid var(--card-border, #b8d8f8);
 		background: var(--card-bg, #e8f4ff);
@@ -593,6 +589,7 @@
 	.tv-el {
 		opacity: 0;
 		animation: el-fade 0.3s ease-out var(--el-delay, 0s) forwards;
+		will-change: transform, opacity;
 	}
 
 	/* Avatar */
