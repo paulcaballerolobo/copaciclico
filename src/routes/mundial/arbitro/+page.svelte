@@ -233,7 +233,8 @@
 		const { data: qs } = await supabase.from('trivia_questions').select('*').order('created_at');
 		triviaQuestions = (qs ?? []) as TriviaQuestion[];
 
-		const { data: ts } = await supabase.from('trivia_sessions').select('*').order('created_at', { ascending: false });
+		const { data: ts, error: tsErr } = await supabase.from('trivia_sessions').select('*').order('created_at', { ascending: false });
+		console.log('[loadTrivia] sessions:', ts?.length, 'error:', tsErr?.message);
 		triviaSessions = (ts ?? []) as TriviaSession[];
 	}
 
@@ -790,8 +791,10 @@
 
 	// ── Conteo de trivias por jugador ───────────────────────────
 	function triviaCountForUser(userId: string): { done: number; total: number } {
-		const done = triviaSessions.filter((s) => s.user_id === userId && s.status === 'completed').length;
-		const total = weeks.length; // 1 trivia disponible por semana
+		const userSessions = triviaSessions.filter(s => s.user_id === userId && !s.id.startsWith('optimistic'));
+		const done = userSessions.filter(s => s.status === 'completed').length;
+		// Total = semanas transcurridas (currentWeek viene de config)
+		const total = currentWeek;
 		return { done, total };
 	}
 
@@ -824,13 +827,20 @@
 
 	// ─── HELPERS ──────────────────────────────────────────────────
 	function triviaStatusForUser(userId: string): string {
-		const s = triviaSessions.find((ts) => ts.user_id === userId);
-		if (!s) return '—';
+		const weekPhase = `week_${currentWeek}`;
+		// Primero buscar la sesión de la semana actual
+		const s = triviaSessions.find((ts) => ts.user_id === userId && ts.phase === weekPhase)
+			?? triviaSessions.find((ts) => ts.user_id === userId && (ts.status === 'ready' || ts.status === 'in_progress'));
+		if (!s) {
+			// Tiene sesiones de otras semanas pero ninguna activa ahora
+			const any = triviaSessions.filter(ts => ts.user_id === userId && !ts.id.startsWith('optimistic'));
+			return any.length > 0 ? '—' : '—';
+		}
 		const map: Record<string, string> = {
 			pending: 'Pendiente',
-			ready: '⏳ Esperando VAMOS',
-			in_progress: '🔴 En progreso',
-			completed: `✅ Completada (${s.score}/5)`
+			ready: 'Esperando',
+			in_progress: 'En progreso',
+			completed: `Hecha (${s.score}/5)`
 		};
 		return map[s.status] ?? s.status;
 	}
