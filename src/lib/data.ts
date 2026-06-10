@@ -9,7 +9,7 @@ export const COUNTRIES: Record<string, Country> = {
 		politico: 'Primera presidenta mujer en la historia de México. Sheinbaum continuó el proyecto de AMLO con perfil más técnico.',
 		pobreza: 2.5, gini: 45.4, deuda: 49.7, pisa: 410, aprobacion: 68, prensa: 47.0, pib: 13200, gasto: 23.3, mcdonalds: 3.8, cerveza: 83.4, obesidad: 28.9, sueno: 7.1, vacaciones: 12, feriados: 7, felicidad: 6.67, frecuencia: 115, pornhub: 9.28, preservativos: 68
 	},
-	ZAF: {
+	RSA: {
 		flag: '🇿🇦', name: 'Sudáfrica', group: 'A', govt: 'Democracia (coalición)', leader: 'Ramaphosa', autocracy: false,
 		economia: 'La más desigual del mundo (Gini 63). Alta criminalidad.',
 		relacion: 'Neutral. Cooperación Sur-Sur.',
@@ -270,7 +270,7 @@ export const COUNTRIES: Record<string, Country> = {
 		politico: 'Primer gobierno libertario de América Latina. Reforma estructural del Estado en curso.',
 		pobreza: 1.5, gini: 40.7, deuda: 83.2, pisa: 401, aprobacion: 35, prensa: 55.0, pib: 14360, gasto: 26, mcdonalds: 5.5, cerveza: 38, obesidad: 28.3, sueno: 7, vacaciones: 14, feriados: 15, felicidad: 6.12, frecuencia: 105, pornhub: 9.73, preservativos: 72
 	},
-	DZA: {
+	ALG: {
 		flag: '🇩🇿', name: 'Argelia', group: 'J', govt: 'Autocracia', leader: 'Tebboune', autocracy: true,
 		economia: 'Dependiente del petróleo. Subsidios masivos a energía y alimentos.',
 		relacion: 'Neutral. Lazos históricos con el Movimiento No Alineado.',
@@ -352,7 +352,7 @@ export const COUNTRIES: Record<string, Country> = {
 };
 
 export const GROUPS: Record<string, Group> = {
-	A: { name: 'Grupo A', countries: ['MEX', 'ZAF', 'KOR', 'CZE'] },
+	A: { name: 'Grupo A', countries: ['MEX', 'RSA', 'KOR', 'CZE'] },
 	B: { name: 'Grupo B', countries: ['CAN', 'BIH', 'QAT', 'SUI'] },
 	C: { name: 'Grupo C', countries: ['BRA', 'MAR', 'HAI', 'SCO'] },
 	D: { name: 'Grupo D', countries: ['USA', 'PRY', 'AUS', 'TUR'] },
@@ -361,7 +361,7 @@ export const GROUPS: Record<string, Group> = {
 	G: { name: 'Grupo G', countries: ['BEL', 'EGY', 'IRN', 'NZL'] },
 	H: { name: 'Grupo H', countries: ['ESP', 'CPV', 'SAU', 'URY'] },
 	I: { name: 'Grupo I', countries: ['FRA', 'SEN', 'IRQ', 'NOR'] },
-	J: { name: 'Grupo J', countries: ['ARG', 'DZA', 'AUT', 'JOR'] },
+	J: { name: 'Grupo J', countries: ['ARG', 'ALG', 'AUT', 'JOR'] },
 	K: { name: 'Grupo K', countries: ['POR', 'COD', 'UZB', 'COL'] },
 	L: { name: 'Grupo L', countries: ['ENG', 'CRO', 'GHA', 'PAN'] }
 };
@@ -650,35 +650,36 @@ export const EDITORIAL: Record<string, Record<string, string>> = {
 	}
 };
 
+// Horarios en hora argentina (ART = UTC-3)
 export const MATCHES: Match[] = [
 	// Grupo A
-	{ id: 'a1', group: 'A', date: '11 jun', time: '21:00', home: 'MEX', away: 'CZE', venue: 'AT&T Stadium, Dallas' },
-	{ id: 'a2', group: 'A', date: '11 jun', time: '18:00', home: 'KOR', away: 'ZAF', venue: 'SoFi Stadium, Los Ángeles' },
-	{ id: 'a3', group: 'A', date: '16 jun', time: '21:00', home: 'MEX', away: 'ZAF', venue: 'AT&T Stadium, Dallas' },
-	{ id: 'a4', group: 'A', date: '16 jun', time: '18:00', home: 'KOR', away: 'CZE', venue: 'SoFi Stadium, Los Ángeles' },
-	{ id: 'a5', group: 'A', date: '20 jun', time: '21:00', home: 'MEX', away: 'KOR', venue: 'SoFi Stadium, Los Ángeles' },
-	{ id: 'a6', group: 'A', date: '20 jun', time: '21:00', home: 'ZAF', away: 'CZE', venue: 'AT&T Stadium, Dallas' },
+	{ id: 'a1', group: 'A', date: '11 jun', time: '18:00', home: 'MEX', away: 'RSA', venue: 'Estadio Azteca, Ciudad de México' },
+	{ id: 'a2', group: 'A', date: '12 jun', time: '01:00', home: 'KOR', away: 'CZE', venue: 'Estadio Akron, Guadalajara' },
+	{ id: 'a3', group: 'A', date: '18 jun', time: '13:00', home: 'CZE', away: 'RSA', venue: 'Mercedes-Benz Stadium, Atlanta' },
+	{ id: 'a4', group: 'A', date: '19 jun', time: '00:00', home: 'MEX', away: 'KOR', venue: 'Estadio Akron, Guadalajara' },
+	{ id: 'a5', group: 'A', date: '25 jun', time: '00:00', home: 'CZE', away: 'MEX', venue: 'Estadio Azteca, Ciudad de México' },
+	{ id: 'a6', group: 'A', date: '25 jun', time: '00:00', home: 'RSA', away: 'KOR', venue: 'Estadio BBVA, Monterrey' },
 	// Grupo B
-	{ id: 'b1', group: 'B', date: '12 jun', time: '18:00', home: 'CAN', away: 'QAT', venue: 'SoFi Stadium, Los Ángeles' },
-	{ id: 'b2', group: 'B', date: '12 jun', time: '21:00', home: 'BIH', away: 'SUI', venue: 'AT&T Stadium, Dallas' },
-	{ id: 'b3', group: 'B', date: '17 jun', time: '21:00', home: 'CAN', away: 'BIH', venue: 'AT&T Stadium, Dallas' },
-	{ id: 'b4', group: 'B', date: '17 jun', time: '18:00', home: 'QAT', away: 'SUI', venue: 'SoFi Stadium, Los Ángeles' },
-	{ id: 'b5', group: 'B', date: '21 jun', time: '21:00', home: 'CAN', away: 'SUI', venue: 'SoFi Stadium, Los Ángeles' },
-	{ id: 'b6', group: 'B', date: '21 jun', time: '21:00', home: 'BIH', away: 'QAT', venue: 'AT&T Stadium, Dallas' },
+	{ id: 'b1', group: 'B', date: '12 jun', time: '16:00', home: 'CAN', away: 'BIH', venue: 'BMO Field, Toronto' },
+	{ id: 'b2', group: 'B', date: '13 jun', time: '19:00', home: 'QAT', away: 'SUI', venue: "Levi's Stadium, San Francisco" },
+	{ id: 'b3', group: 'B', date: '18 jun', time: '19:00', home: 'SUI', away: 'BIH', venue: 'SoFi Stadium, Los Ángeles' },
+	{ id: 'b4', group: 'B', date: '18 jun', time: '22:00', home: 'CAN', away: 'QAT', venue: 'BC Place, Vancouver' },
+	{ id: 'b5', group: 'B', date: '24 jun', time: '19:00', home: 'SUI', away: 'CAN', venue: 'BC Place, Vancouver' },
+	{ id: 'b6', group: 'B', date: '24 jun', time: '19:00', home: 'BIH', away: 'QAT', venue: 'Lumen Field, Seattle' },
 	// Grupo C
-	{ id: 'c1', group: 'C', date: '13 jun', time: '18:00', home: 'BRA', away: 'SCO', venue: 'MetLife Stadium, Nueva York' },
-	{ id: 'c2', group: 'C', date: '13 jun', time: '21:00', home: 'MAR', away: 'HAI', venue: 'MetLife Stadium, Nueva York' },
-	{ id: 'c3', group: 'C', date: '17 jun', time: '21:00', home: 'BRA', away: 'MAR', venue: 'MetLife Stadium, Nueva York' },
-	{ id: 'c4', group: 'C', date: '18 jun', time: '18:00', home: 'SCO', away: 'HAI', venue: 'MetLife Stadium, Nueva York' },
-	{ id: 'c5', group: 'C', date: '22 jun', time: '21:00', home: 'BRA', away: 'HAI', venue: 'MetLife Stadium, Nueva York' },
-	{ id: 'c6', group: 'C', date: '22 jun', time: '21:00', home: 'SCO', away: 'MAR', venue: 'MetLife Stadium, Nueva York' },
+	{ id: 'c1', group: 'C', date: '13 jun', time: '19:00', home: 'BRA', away: 'MAR', venue: 'MetLife Stadium, Nueva York' },
+	{ id: 'c2', group: 'C', date: '13 jun', time: '22:00', home: 'HAI', away: 'SCO', venue: 'Gillette Stadium, Boston' },
+	{ id: 'c3', group: 'C', date: '19 jun', time: '19:00', home: 'SCO', away: 'MAR', venue: 'Gillette Stadium, Boston' },
+	{ id: 'c4', group: 'C', date: '19 jun', time: '22:00', home: 'BRA', away: 'HAI', venue: 'Lincoln Financial Field, Filadelfia' },
+	{ id: 'c5', group: 'C', date: '24 jun', time: '19:00', home: 'SCO', away: 'BRA', venue: 'Hard Rock Stadium, Miami' },
+	{ id: 'c6', group: 'C', date: '24 jun', time: '19:00', home: 'MAR', away: 'HAI', venue: 'Mercedes-Benz Stadium, Atlanta' },
 	// Grupo J — Argentina
-	{ id: 'j1', group: 'J', date: '12 jun', time: '21:00', home: 'ARG', away: 'DZA', venue: 'AT&T Stadium, Dallas', arge: true },
-	{ id: 'j2', group: 'J', date: '17 jun', time: '18:00', home: 'AUT', away: 'JOR', venue: 'SoFi Stadium, Los Ángeles' },
-	{ id: 'j3', group: 'J', date: '21 jun', time: '21:00', home: 'ARG', away: 'AUT', venue: 'AT&T Stadium, Dallas', arge: true },
-	{ id: 'j4', group: 'J', date: '21 jun', time: '21:00', home: 'DZA', away: 'JOR', venue: 'SoFi Stadium, Los Ángeles' },
-	{ id: 'j5', group: 'J', date: '25 jun', time: '21:00', home: 'ARG', away: 'JOR', venue: 'AT&T Stadium, Dallas', arge: true },
-	{ id: 'j6', group: 'J', date: '25 jun', time: '21:00', home: 'DZA', away: 'AUT', venue: 'SoFi Stadium, Los Ángeles' }
+	{ id: 'j1', group: 'J', date: '16 jun', time: '23:00', home: 'ARG', away: 'ALG', venue: 'Arrowhead Stadium, Kansas City', arge: true },
+	{ id: 'j2', group: 'J', date: '17 jun', time: '04:00', home: 'AUT', away: 'JOR', venue: "Levi's Stadium, San Francisco" },
+	{ id: 'j3', group: 'J', date: '22 jun', time: '15:00', home: 'ARG', away: 'AUT', venue: 'AT&T Stadium, Dallas', arge: true },
+	{ id: 'j4', group: 'J', date: '23 jun', time: '03:00', home: 'JOR', away: 'ALG', venue: "Levi's Stadium, San Francisco" },
+	{ id: 'j5', group: 'J', date: '28 jun', time: '00:00', home: 'ALG', away: 'AUT', venue: 'Arrowhead Stadium, Kansas City' },
+	{ id: 'j6', group: 'J', date: '28 jun', time: '00:00', home: 'JOR', away: 'ARG', venue: 'AT&T Stadium, Dallas', arge: true }
 ];
 
 export const STATS_DATA: StatCard[] = [

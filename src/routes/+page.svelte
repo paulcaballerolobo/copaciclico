@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount, onDestroy } from 'svelte';
+	// onMount/onDestroy used for arg countdown below
 
 	const heroImages = [
 		'/fondo-hero.png',
@@ -8,11 +9,10 @@
 		'/fondo-hero5.png',
 		'/fondo-hero6.png'
 	];
+	const heroImage = heroImages[Math.floor(Math.random() * heroImages.length)];
 
-	// Primer partido del Mundial: México vs Rep. Checa, 11 jun 21:00 CDT = 12 jun 01:00 UTC
-	const openingMatch = new Date('2026-06-12T01:00:00Z');
-	// Argentina first match: June 12 21:00 CDT = June 13 01:00 UTC
-	const argentinaMatch = new Date('2026-06-13T01:00:00Z');
+	// Argentina first match: June 16 22:00 ART = June 17 01:00 UTC
+	const argentinaMatch = new Date('2026-06-17T01:00:00Z');
 	type CD = { days: number; hours: number; mins: number; secs: number };
 
 	function calc(target: Date): CD {
@@ -26,13 +26,11 @@
 		};
 	}
 
-	let opening: CD = calc(openingMatch);
 	let arg: CD = calc(argentinaMatch);
 
 	let interval: ReturnType<typeof setInterval>;
 	onMount(() => {
 		interval = setInterval(() => {
-			opening = calc(openingMatch);
 			arg = calc(argentinaMatch);
 		}, 1000);
 	});
@@ -50,34 +48,16 @@
 			desc: 'Clasificá los 48 países por pobreza, educación, desigualdad y más. El fixture que nadie se animó a hacer.'
 		},
 		{
-			href: '/fixture',
+			href: '/mundial/prode',
 			num: '02',
-			label: 'Simulador de Fixture',
+			label: 'Prode Cíclico',
 			desc: '¿Quién gana si compiten por libertad de prensa? ¿Por PIB? Armá tu torneo y descubrí el campeón inesperado.'
 		},
 		{
-			href: '/paises',
-			num: '03',
-			label: 'Países',
-			desc: 'Ficha completa de cada selección: economía, líder político y cómo se vincula hoy con Argentina.'
-		},
-		{
 			href: '/calendario',
-			num: '04',
+			num: '03',
 			label: 'Calendario',
 			desc: 'Todos los partidos con cuenta regresiva y horarios en hora argentina. Nunca te perdas un juego.'
-		},
-		{
-			href: '/ciudades',
-			num: '05',
-			label: 'Ciudades sede',
-			desc: 'Las 16 sedes en EEUU, Canadá y México. Dónde juega Argentina y cuáles son los estadios más grandes.'
-		},
-		{
-			href: '/stats',
-			num: '06',
-			label: 'Estadísticas',
-			desc: 'Los datos más picantes del torneo. Las comparaciones que no vas a ver en ESPN ni en TyC Sports.'
 		}
 	];
 </script>
@@ -86,10 +66,7 @@
 
 	<!-- ═══ HERO ═══ -->
 	<section class="hero">
-		<div class="img-bg" aria-hidden="true">
-			{#each heroImages as img, i}
-				<div class="img-slide" style="background-image: url({img}); animation-delay: {i * 5}s"></div>
-			{/each}
+		<div class="img-bg" aria-hidden="true" style="background-image: url({heroImage})">
 			<div class="video-overlay"></div>
 		</div>
 
@@ -108,22 +85,6 @@
 
 			<!-- Right: countdown card + section buttons -->
 			<div class="hero-right">
-				<!-- Countdown card -->
-				<div class="hero-cd-card">
-					<div class="hcd-label">Inicio del Mundial</div>
-					<div class="hcd-match">🇲🇽 <span>México vs Rep. Checa</span> 🇨🇿</div>
-					<div class="hcd-timer">
-						<div class="hcd-unit"><span class="hcd-num">{pad(opening.days)}</span><span class="hcd-lbl">días</span></div>
-						<span class="hcd-sep">:</span>
-						<div class="hcd-unit"><span class="hcd-num">{pad(opening.hours)}</span><span class="hcd-lbl">hs</span></div>
-						<span class="hcd-sep">:</span>
-						<div class="hcd-unit"><span class="hcd-num">{pad(opening.mins)}</span><span class="hcd-lbl">min</span></div>
-						<span class="hcd-sep blink">:</span>
-						<div class="hcd-unit"><span class="hcd-num hcd-secs">{pad(opening.secs)}</span><span class="hcd-lbl">seg</span></div>
-					</div>
-					<div class="hcd-venue">11 jun · 21:00 hs · AT&T Stadium, Dallas</div>
-				</div>
-
 				<!-- Section buttons -->
 				<nav class="hero-nav-grid" aria-label="Secciones">
 					{#each sections as s}
@@ -299,30 +260,17 @@
 		position: absolute;
 		inset: 0;
 		z-index: 0;
-	}
-	.img-slide {
-		position: absolute;
-		inset: 0;
 		background-size: cover;
 		background-position: center;
-		opacity: 0;
-		animation: slideShow 25s infinite;
-	}
-	@keyframes slideShow {
-		0%    { opacity: 0; }
-		5%    { opacity: 1; }
-		20%   { opacity: 1; }
-		25%   { opacity: 0; }
-		100%  { opacity: 0; }
 	}
 	.video-overlay {
 		position: absolute;
 		inset: 0;
 		background: linear-gradient(
 			to right,
-			rgba(0,0,0,0.82) 0%,
-			rgba(0,0,0,0.65) 55%,
-			rgba(0,0,0,0.55) 100%
+			rgba(0,0,0,0.94) 0%,
+			rgba(0,0,0,0.85) 55%,
+			rgba(0,0,0,0.78) 100%
 		);
 	}
 
@@ -347,24 +295,8 @@
 
 	/* Left card */
 	.hero-card {
-		background: rgba(0,0,0,0.45);
-		backdrop-filter: blur(20px);
-		-webkit-backdrop-filter: blur(20px);
-		border: 1px solid rgba(255,255,255,0.15);
-		border-radius: 20px;
 		padding: 48px 44px;
 		position: relative;
-		overflow: hidden;
-		box-shadow: 0 8px 40px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.25);
-	}
-	.hero-card::before {
-		content: '';
-		position: absolute;
-		top: 0; left: 0; right: 0;
-		height: 45%;
-		background: linear-gradient(180deg, rgba(255,255,255,0.12) 0%, rgba(255,255,255,0) 100%);
-		border-radius: 20px 20px 0 0;
-		pointer-events: none;
 	}
 
 	.hero-card-body {
