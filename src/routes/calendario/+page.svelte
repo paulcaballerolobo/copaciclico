@@ -192,8 +192,8 @@
 <style>
 	/* ── ARGENTINA CARD ── */
 	.arg-card {
-		background: linear-gradient(135deg, rgba(91,155,213,0.12) 0%, rgba(91,155,213,0.04) 100%);
-		border: 1px solid rgba(91,155,213,0.3);
+		background: #061428;
+		border: 1px solid rgba(91,155,213,0.2);
 		border-radius: 16px;
 		padding: 28px 32px;
 		margin-bottom: 28px;
@@ -243,11 +243,11 @@
 	.arg-teams {
 		display: flex;
 		align-items: center;
-		justify-content: space-between;
-		gap: 16px;
+		justify-content: center;
+		gap: 32px;
 		margin-bottom: 14px;
 	}
-	.arg-team { flex: 1; display: flex; flex-direction: column; align-items: flex-start; }
+	.arg-team { display: flex; flex-direction: column; align-items: flex-start; }
 	.arg-team-right { align-items: flex-end; }
 	.arg-initials {
 		font-family: 'Inter', sans-serif;
@@ -263,7 +263,7 @@
 		gap: 6px;
 		margin-top: 6px;
 	}
-	.arg-team-bottom-right { flex-direction: row-reverse; }
+	.arg-team-bottom-right { flex-direction: row; }
 	.arg-flag { font-size: 22px; }
 	.arg-tname {
 		font-family: 'Inter', sans-serif;
