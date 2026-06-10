@@ -1,28 +1,30 @@
 <script lang="ts">
 	import { page } from '$app/stores';
 	import { onMount, onDestroy } from 'svelte';
-	import { MATCHES, COUNTRIES } from '$lib/data';
+	import { supabase } from '$lib/supabase';
 	import '../app.css';
 
 	const tabs = [
 		{ href: '/', label: 'Inicio' },
 		{ href: '/datos', label: 'Mundial de los Datos' },
-		{ href: '/paises', label: 'Países' },
 		{ href: '/stats', label: 'Estadísticas' },
 		{ href: '/mundial', label: '🏆 Prode Cíclico', prode: true },
-		{ href: '/mundial/trivia', label: '🎯 Trivia', trivia: true }
 	];
 
-	// Horarios en data.ts están en ART (UTC-3), sumamos 3h para obtener UTC
-	const MONTH: Record<string, number> = { ene:0, feb:1, mar:2, abr:3, may:4, jun:5, jul:6, ago:7 };
-
-	function matchStart(m: typeof MATCHES[number]): Date {
-		const [day, mon] = m.date.split(' ');
-		const [h, min] = m.time.split(':').map(Number);
-		return new Date(Date.UTC(2026, MONTH[mon], Number(day), h + 3, min));
+	interface MatchRow {
+		id: string;
+		match_number: number;
+		kickoff_time: string;
+		team_home: string;
+		team_away: string;
+		venue: string | null;
+		group_name: string | null;
 	}
+	interface TeamInfo { name: string; flag: string; }
+	type StripMode = 'live' | 'next';
+	interface StripState { mode: StripMode; match: MatchRow; }
 
-	const MATCH_DURATION_MS = 2 * 60 * 60 * 1000; // 2 horas
+	const MATCH_DURATION_MS = 2 * 60 * 60 * 1000;
 
 	type CD = { days: number; hours: number; mins: number; secs: number };
 
@@ -37,45 +39,74 @@
 		};
 	}
 
+	function formatDate(iso: string): string {
+		return new Date(iso).toLocaleString('es-AR', {
+			timeZone: 'America/Argentina/Buenos_Aires',
+			day: 'numeric', month: 'short'
+		});
+	}
+
+	function formatTime(iso: string): string {
+		return new Date(iso).toLocaleString('es-AR', {
+			timeZone: 'America/Argentina/Buenos_Aires',
+			hour: '2-digit', minute: '2-digit', hour12: false
+		});
+	}
+
 	function pad(n: number) { return String(n).padStart(2, '0'); }
 
-	function getCountry(code: string) {
-		return COUNTRIES[code as keyof typeof COUNTRIES];
+	let upcomingMatches: MatchRow[] = [];
+	let teamsMap: Record<string, TeamInfo> = {};
+	let strip: StripState | null = null;
+	let cd: CD = { days: 0, hours: 0, mins: 0, secs: 0 };
+	let elapsed = 0;
+	let interval: ReturnType<typeof setInterval>;
+
+	function teamInfo(code: string): TeamInfo {
+		return teamsMap[code] ?? { name: code, flag: '🏳' };
 	}
 
-	function getStripState() {
+	function computeStrip() {
 		const now = Date.now();
-		// Find live match first
-		const live = MATCHES.find(m => {
-			const start = matchStart(m).getTime();
+		const live = upcomingMatches.find(m => {
+			const start = new Date(m.kickoff_time).getTime();
 			return now >= start && now < start + MATCH_DURATION_MS;
 		});
-		if (live) return { mode: 'live' as const, match: live };
-		// Find next upcoming match
-		const upcoming = MATCHES
-			.map(m => ({ match: m, start: matchStart(m).getTime() }))
+		if (live) {
+			strip = { mode: 'live', match: live };
+			elapsed = Math.floor((now - new Date(live.kickoff_time).getTime()) / 60000);
+			return;
+		}
+		const next = upcomingMatches
+			.map(m => ({ match: m, start: new Date(m.kickoff_time).getTime() }))
 			.filter(({ start }) => start > now)
 			.sort((a, b) => a.start - b.start)[0];
-		if (upcoming) return { mode: 'next' as const, match: upcoming.match };
-		return null;
+		if (next) {
+			strip = { mode: 'next', match: next.match };
+			cd = calcCD(new Date(next.match.kickoff_time));
+		} else {
+			strip = null;
+		}
 	}
 
-	let strip = getStripState();
-	let cd: CD = strip?.mode === 'next' ? calcCD(matchStart(strip.match)) : { days: 0, hours: 0, mins: 0, secs: 0 };
-	let elapsed = 0; // minutes elapsed for live match
-
-	let interval: ReturnType<typeof setInterval>;
-	onMount(() => {
-		interval = setInterval(() => {
-			strip = getStripState();
-			if (strip?.mode === 'next') {
-				cd = calcCD(matchStart(strip.match));
-			} else if (strip?.mode === 'live') {
-				elapsed = Math.floor((Date.now() - matchStart(strip.match).getTime()) / 60000);
-			}
-		}, 1000);
+	onMount(async () => {
+		const windowStart = new Date(Date.now() - MATCH_DURATION_MS).toISOString();
+		const [{ data: matchData }, { data: teamData }] = await Promise.all([
+			supabase
+				.from('matches')
+				.select('id, match_number, kickoff_time, team_home, team_away, venue, group_name')
+				.eq('phase', 'groups')
+				.gte('kickoff_time', windowStart)
+				.order('kickoff_time')
+				.limit(10),
+			supabase.from('teams').select('code, name, flag')
+		]);
+		upcomingMatches = (matchData ?? []) as MatchRow[];
+		teamsMap = Object.fromEntries(((teamData ?? []) as { code: string; name: string; flag: string }[]).map(t => [t.code, { name: t.name, flag: t.flag }]));
+		computeStrip();
+		interval = setInterval(computeStrip, 1000);
 	});
-	onDestroy(() => clearInterval(interval));
+	onDestroy(() => { if (interval) clearInterval(interval); });
 </script>
 
 {#if !$page.url.pathname.startsWith('/mundial/trivia')}
@@ -102,22 +133,22 @@
 			<span class="strip-live-dot"></span>
 			<span class="strip-label strip-label-live">EN VIVO</span>
 			<span class="strip-match">
-				{getCountry(strip.match.home)?.flag} {getCountry(strip.match.home)?.name}
+				{teamInfo(strip.match.team_home).flag} {teamInfo(strip.match.team_home).name}
 				<span class="strip-vs">vs</span>
-				{getCountry(strip.match.away)?.name} {getCountry(strip.match.away)?.flag}
+				{teamInfo(strip.match.team_away).name} {teamInfo(strip.match.team_away).flag}
 			</span>
 			<span class="strip-dot">·</span>
-			<span class="strip-venue">{strip.match.venue}</span>
+			<span class="strip-venue">{strip.match.venue ?? ''}</span>
 			<span class="strip-elapsed">min {elapsed}'</span>
 		{:else}
 			<span class="strip-label">PRÓXIMO PARTIDO</span>
 			<span class="strip-match">
-				{getCountry(strip.match.home)?.flag} {getCountry(strip.match.home)?.name}
+				{teamInfo(strip.match.team_home).flag} {teamInfo(strip.match.team_home).name}
 				<span class="strip-vs">vs</span>
-				{getCountry(strip.match.away)?.name} {getCountry(strip.match.away)?.flag}
+				{teamInfo(strip.match.team_away).name} {teamInfo(strip.match.team_away).flag}
 			</span>
 			<span class="strip-dot">·</span>
-			<span class="strip-venue">{strip.match.date} · {strip.match.time} hs · {strip.match.venue}</span>
+			<span class="strip-venue">{formatDate(strip.match.kickoff_time)} · {formatTime(strip.match.kickoff_time)} hs · {strip.match.venue ?? ''}</span>
 			<span class="strip-dot">·</span>
 			<div class="strip-cd">
 				{#if cd.days > 0}<span class="strip-num">{pad(cd.days)}</span><span class="strip-sep">d</span><span class="strip-colon">:</span>{/if}

@@ -1,10 +1,65 @@
 <script lang="ts">
+	import { onMount } from 'svelte';
 	import { fixtureResults } from '$lib/stores';
-	import { COUNTRIES, GROUPS, MATCHES } from '$lib/data';
+	import { COUNTRIES } from '$lib/data';
+	import { supabase } from '$lib/supabase';
+
+	interface MatchRow {
+		id: string;
+		match_number: number;
+		kickoff_time: string;
+		team_home: string;
+		team_away: string;
+		group_name: string;
+		venue: string | null;
+	}
+
+	const PRODE_GROUPS = ['A', 'B', 'C', 'J'];
+
+	let matchesByGroup: Record<string, MatchRow[]> = {};
+	let loading = true;
+
+	function formatDate(iso: string): string {
+		return new Date(iso).toLocaleString('es-AR', {
+			timeZone: 'America/Argentina/Buenos_Aires',
+			day: 'numeric', month: 'short'
+		});
+	}
+
+	function formatTime(iso: string): string {
+		return new Date(iso).toLocaleString('es-AR', {
+			timeZone: 'America/Argentina/Buenos_Aires',
+			hour: '2-digit', minute: '2-digit', hour12: false
+		});
+	}
+
+	function matchKey(m: MatchRow) { return String(m.match_number); }
+
+	onMount(async () => {
+		const { data } = await supabase
+			.from('matches')
+			.select('id, match_number, kickoff_time, team_home, team_away, group_name, venue')
+			.eq('phase', 'groups')
+			.in('group_name', PRODE_GROUPS)
+			.order('kickoff_time');
+
+		const matches = (data ?? []) as MatchRow[];
+		const grouped: Record<string, MatchRow[]> = {};
+		for (const m of matches) {
+			if (!grouped[m.group_name]) grouped[m.group_name] = [];
+			grouped[m.group_name].push(m);
+		}
+		matchesByGroup = grouped;
+		loading = false;
+	});
+
+	function team(code: string) {
+		return COUNTRIES[code as keyof typeof COUNTRIES] ?? { flag: '🏳', name: code };
+	}
 
 	function shareFixture() {
 		const picks = Object.values($fixtureResults)
-			.map((code) => `${COUNTRIES[code]?.flag} ${COUNTRIES[code]?.name}`)
+			.map((code) => `${team(code)?.flag} ${team(code)?.name}`)
 			.join(', ');
 		const text = picks ? `Mi fixture del Mundial 2026: ${picks}` : 'Armé mi fixture del Mundial 2026 con Cíclico';
 		const url = window.location.href;
@@ -21,32 +76,35 @@
 	<div class="section-title">Simulador de Fixture</div>
 	<div class="section-subtitle">Hacé clic en el equipo que creés que gana cada partido. Se muestran los grupos A, B, C y J.</div>
 
+	{#if loading}
+		<div class="loading">Cargando partidos…</div>
+	{:else}
 	<div class="fixture-groups">
-		{#each Object.entries(GROUPS) as [gk]}
-			{@const groupMatches = MATCHES.filter((m) => m.group === gk)}
+		{#each PRODE_GROUPS as gk}
+			{@const groupMatches = matchesByGroup[gk] ?? []}
 			<div class="fixture-group">
 				<div class="fixture-group-header">
 					<span class="group-label">GRUPO {gk}</span>
 				</div>
 				{#each groupMatches as m}
-					{@const hc = COUNTRIES[m.home]}
-					{@const ac = COUNTRIES[m.away]}
-					{@const res = $fixtureResults[m.id]}
+					{@const hc = team(m.team_home)}
+					{@const ac = team(m.team_away)}
+					{@const res = $fixtureResults[matchKey(m)]}
 					<div class="fixture-match">
-						<div class="fixture-date">{m.date} · {m.time} hs</div>
+						<div class="fixture-date">{formatDate(m.kickoff_time)} · {formatTime(m.kickoff_time)} hs</div>
 						<div class="fixture-match-teams">
 							<button
 								class="fixture-team-btn"
-								class:winner={res === m.home}
-								class:loser={res && res !== m.home}
-								on:click={() => fixtureResults.update((r) => ({ ...r, [m.id]: m.home }))}
+								class:winner={res === m.team_home}
+								class:loser={res && res !== m.team_home}
+								on:click={() => fixtureResults.update((r) => ({ ...r, [matchKey(m)]: m.team_home }))}
 							>{hc.flag} {hc.name}</button>
 							<span class="fixture-vs">vs</span>
 							<button
 								class="fixture-team-btn"
-								class:winner={res === m.away}
-								class:loser={res && res !== m.away}
-								on:click={() => fixtureResults.update((r) => ({ ...r, [m.id]: m.away }))}
+								class:winner={res === m.team_away}
+								class:loser={res && res !== m.team_away}
+								on:click={() => fixtureResults.update((r) => ({ ...r, [matchKey(m)]: m.team_away }))}
 							>{ac.flag} {ac.name}</button>
 						</div>
 					</div>
@@ -54,6 +112,7 @@
 			</div>
 		{/each}
 	</div>
+	{/if}
 
 	<div style="margin-top:24px;text-align:center;">
 		<button class="share-btn" on:click={shareFixture}>
@@ -84,5 +143,6 @@
 	.fixture-team-btn.loser { opacity: 0.35; }
 	.fixture-vs { font-family: 'Inter', monospace; font-size: 10px; color: var(--muted); flex-shrink: 0; }
 	.fixture-date { font-family: 'Inter', monospace; font-size: 10px; color: var(--muted); margin-bottom: 6px; }
+	.loading { text-align: center; padding: 40px; color: var(--muted); font-family: 'DM Mono', monospace; font-size: 13px; }
 	@media (max-width: 900px) { .fixture-groups { grid-template-columns: 1fr; } }
 </style>
