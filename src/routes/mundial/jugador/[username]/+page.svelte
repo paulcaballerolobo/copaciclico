@@ -92,6 +92,21 @@
 	let loginLoading = false;
 
 	// Config / modo
+	const TRIVIA_POINTS: Record<number, number> = { 1: 50, 2: 70, 3: 100 };
+	const TRIVIA_PENALTY = 25;
+
+	function triviaPhaseMultiplier(phase: string): number {
+		const m = phase?.match(/^week_(\d+)$/);
+		const week = m ? parseInt(m[1]) : 1;
+		return 1 + (week - 1) * 0.25;
+	}
+
+	function triviaMaxPoints(session: TriviaSession): number {
+		const base = TRIVIA_POINTS[session.level_chosen] ?? 50;
+		const mult = triviaPhaseMultiplier(session.phase);
+		return Math.ceil(5 * base * mult);
+	}
+
 	let isRehearsalMode = true;
 	let currentWeek = 1;
 	let pozoStatus = 'closed';
@@ -170,6 +185,44 @@
 	async function loadData() {
 		if (!user) return;
 
+		// Refrescar puntos y ranking desde la DB
+		if (isRehearsalMode) {
+			// En ensayo, puntos vienen de predictions, ranking se recalcula
+			const { data: predPoints } = await supabase
+				.from('predictions')
+				.select('user_id, points_earned')
+				.eq('is_rehearsal', true)
+				.not('points_earned', 'is', null);
+			const { data: allUsers } = await supabase
+				.from('users')
+				.select('id, points_total')
+				.eq('is_active', true)
+				.eq('is_admin', false);
+			if (predPoints && allUsers) {
+				const byUser: Record<string, number> = {};
+				for (const p of predPoints as { user_id: string; points_earned: number }[]) {
+					byUser[p.user_id] = (byUser[p.user_id] ?? 0) + (p.points_earned ?? 0);
+				}
+				const myPoints = byUser[user.id] ?? 0;
+				const ranking = [...allUsers]
+					.map(u => ({ id: u.id, pts: byUser[u.id] ?? 0 }))
+					.sort((a, b) => b.pts - a.pts);
+				const myRank = ranking.findIndex(u => u.id === user!.id) + 1;
+				user = { ...user, points_total: myPoints, ranking_position: myRank };
+				localStorage.setItem('mundial_user', JSON.stringify(user));
+			}
+		} else {
+			const { data: freshUser } = await supabase
+				.from('users')
+				.select('points_total, ranking_position')
+				.eq('id', user.id)
+				.single();
+			if (freshUser) {
+				user = { ...user, points_total: freshUser.points_total, ranking_position: freshUser.ranking_position };
+				localStorage.setItem('mundial_user', JSON.stringify(user));
+			}
+		}
+
 		// Config
 		const { data: configRows } = await supabase.from('config').select('key, value');
 		if (configRows) {
@@ -217,23 +270,24 @@
 			}
 		});
 
-		// Sesión de trivia activa
+		// Sesión de trivia más reciente activa (ready o in_progress)
 		const { data: ts } = await supabase
 			.from('trivia_sessions')
 			.select('*')
 			.eq('user_id', user!.id)
 			.in('status', ['ready', 'in_progress'])
+			.order('enabled_at', { ascending: false })
+			.limit(1)
 			.maybeSingle();
 		triviaSession = ts as TriviaSession | null;
 
-		// Conteo de trivias completadas
+		// Conteo: completadas y total enviadas
 		const { data: allTs } = await supabase
 			.from('trivia_sessions')
-			.select('id')
-			.eq('user_id', user!.id)
-			.eq('status', 'completed');
-		triviaCompletedCount = (allTs ?? []).length;
-		triviaWeekTotal = currentWeek; // 1 trivia disponible por semana
+			.select('id, status')
+			.eq('user_id', user!.id);
+		triviaCompletedCount = (allTs ?? []).filter(s => s.status === 'completed').length;
+		triviaWeekTotal = (allTs ?? []).length;
 
 		// Intento de pozo
 		const { data: pa } = await supabase
@@ -250,7 +304,7 @@
 	function setupRealtime() {
 		if (!user) return;
 
-		// Escuchar cambios en la sesión de trivia del jugador
+		// Escuchar cambios en las sesiones de trivia del jugador
 		const triviaChannel = supabase
 			.channel(`trivia-player-${user.id}`)
 			.on(
@@ -260,10 +314,16 @@
 					if (payload.eventType === 'DELETE') { triviaSession = null; return; }
 					const updated = payload.new as TriviaSession;
 					if (updated.status === 'ready' || updated.status === 'in_progress') {
+						const isNew = !triviaSession || updated.id !== triviaSession.id;
 						triviaSession = updated;
+						triviaWeekTotal = Math.max(triviaWeekTotal, triviaCompletedCount + 1);
+						if (isNew && updated.status === 'ready') {
+							triviaPhase = 'idle';
+						}
 					} else if (updated.status === 'completed') {
-						triviaSession = updated;
+						triviaSession = null;
 						triviaCompletedCount += 1;
+						triviaWeekTotal = Math.max(triviaWeekTotal, triviaCompletedCount);
 					}
 				}
 			)
@@ -450,18 +510,13 @@
 	async function closeTriviaSession() {
 		if (!triviaSession || !user) return;
 
-		const POINTS: Record<number, number> = { 1: 5, 2: 10, 3: 20 };
-		const penaltyConfig = await supabase
-			.from('config')
-			.select('value')
-			.eq('key', 'trivia_penalty_points')
-			.single();
-		const penalty = parseInt(penaltyConfig.data?.value ?? '2');
+		const mult = triviaPhaseMultiplier(triviaSession.phase);
+		const pointsPerCorrect = Math.ceil(TRIVIA_POINTS[triviaSession.level_chosen] * mult);
 
 		let points = 0;
 		for (const answer of triviaSession.answers) {
-			if (answer.correct) points += POINTS[triviaSession.level_chosen];
-			else points -= penalty;
+			if (answer.correct) points += pointsPerCorrect;
+			else points -= TRIVIA_PENALTY;
 		}
 		points = Math.max(0, points);
 
@@ -636,74 +691,72 @@
 	<div class="prode-wrap">
 
 		<!-- ── HEADER PERSONAL ── -->
-		<header class="prode-header card">
-			<div class="prode-avatar-wrap">
-				{#if user.avatar_url}
-					<img src={user.avatar_url} alt={user.full_name} class="prode-avatar" />
-				{:else}
-					<div class="prode-avatar-placeholder">
-						{user.full_name.charAt(0).toUpperCase()}
-					</div>
-				{/if}
-				<button
-					class="prode-avatar-change"
-					on:click={() => avatarInput.click()}
-					title="Cambiar foto"
-					disabled={avatarUploading}
-					aria-label="Cambiar foto de perfil"
-				>
-					{avatarUploading ? '⏳' : '📷'}
-				</button>
-				<input
-					bind:this={avatarInput}
-					type="file"
-					accept="image/jpeg,image/png,image/webp"
-					style="display:none"
-					on:change={handleAvatarUpload}
-				/>
-			</div>
-
-			<div class="prode-header-info">
-				<div class="prode-welcome">¡Hola,</div>
-				<div class="prode-playername">{user.full_name}!</div>
-				{#if isRehearsalMode}
-					<span class="prode-badge-ensayo">ENSAYO</span>
-				{/if}
-			</div>
-
-			<div class="prode-header-stats">
-				<div class="prode-stat">
-					<div class="prode-stat-value">{user.points_total ?? 0}</div>
-					<div class="prode-stat-label">puntos</div>
+		<header class="prode-header">
+			<div class="prode-header-main">
+				<div class="prode-avatar-wrap">
+					{#if user.avatar_url}
+						<img src={user.avatar_url} alt={user.full_name} class="prode-avatar" />
+					{:else}
+						<div class="prode-avatar-placeholder">
+							{user.full_name.charAt(0).toUpperCase()}
+						</div>
+					{/if}
+					<button
+						class="prode-avatar-change"
+						on:click={() => avatarInput.click()}
+						title="Cambiar foto"
+						disabled={avatarUploading}
+						aria-label="Cambiar foto de perfil"
+					>
+						{avatarUploading ? '⏳' : '📷'}
+					</button>
+					<input
+						bind:this={avatarInput}
+						type="file"
+						accept="image/jpeg,image/png,image/webp"
+						style="display:none"
+						on:change={handleAvatarUpload}
+					/>
 				</div>
-				{#if user.ranking_position}
-					<div class="prode-stat-divider"></div>
+
+				<div class="prode-header-info">
+					<div class="prode-welcome">¡Hola,</div>
+					<div class="prode-playername">{user.full_name.split(' ')[0]}</div>
+					<div class="prode-playerlastname">{user.full_name.split(' ').slice(1).join(' ')}</div>
+					{#if isRehearsalMode}
+						<span class="prode-badge-ensayo">ENSAYO</span>
+					{/if}
+				</div>
+
+				<div class="prode-header-stats">
 					<div class="prode-stat">
-						<div class="prode-stat-value">#{user.ranking_position}</div>
+						<div class="prode-stat-value">{user.points_total ?? 0}</div>
+						<div class="prode-stat-label">puntos</div>
+					</div>
+					<div class="prode-stat">
+						<div class="prode-stat-value">{user.ranking_position ? `#${user.ranking_position}` : '—'}</div>
 						<div class="prode-stat-label">ranking</div>
 					</div>
-				{/if}
-				{#if triviaWeekTotal > 0}
-					<div class="prode-stat-divider"></div>
-					<div class="prode-stat" title="Trivias completadas">
-						<div class="prode-stat-value prode-stat-trivia">
-							{triviaCompletedCount}<span class="prode-stat-trivia-total">/{triviaWeekTotal > 0 ? triviaWeekTotal : '?'}</span>
+					<div class="prode-stat" title="Trivias completadas / enviadas">
+						<div class="prode-stat-value">
+							{triviaCompletedCount}<span class="prode-stat-trivia-total">/{triviaWeekTotal}</span>
 						</div>
 						<div class="prode-stat-label">trivias</div>
 					</div>
-				{/if}
-				<div class="prode-stat-divider"></div>
+				</div>
+			</div>
+
+			<div class="prode-header-footer">
 				<button
 					class="prode-header-logout"
 					on:click={() => { localStorage.removeItem('mundial_user'); location.reload(); }}
-					title="Cerrar sesión"
 				>
-					<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+					<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
 						<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
 						<polyline points="16 17 21 12 16 7"/>
 						<line x1="21" y1="12" x2="9" y2="12"/>
 					</svg>
-					Salir
+					Cerrar sesión
 				</button>
 			</div>
 		</header>
@@ -713,20 +766,13 @@
 			<section class="prode-section prode-trivia-section">
 				<div class="section-hero-label">Trivia habilitada</div>
 
-				<!-- BOTÓN ROJO: IR A LA PANTALLA DE TRIVIA -->
-				<a href="/mundial/trivia?J={user.username}" class="prode-btn-trivia-go">
-					🎯 Ir a la Trivia
-				</a>
-
 				{#if triviaPhase === 'idle'}
 					<!-- Botón de arranque -->
 					<div class="prode-trivia-ready card">
 						<div class="prode-trivia-icon">🎯</div>
 						<h2 class="prode-trivia-ready-title">¡Tu trivia está lista!</h2>
 						<p class="prode-trivia-ready-desc">
-							{triviaQuestions.length > 0 ? triviaQuestions.length : 5} preguntas · Nivel
-							{triviaSession.level_chosen === 1 ? 'Fácil' : triviaSession.level_chosen === 2 ? 'Intermedio' : 'Difícil'}
-							· 20 segundos por pregunta
+							{triviaQuestions.length > 0 ? triviaQuestions.length : 5} preguntas · 20 seg por pregunta · hasta <strong>{triviaMaxPoints(triviaSession)} pts</strong>
 						</p>
 						<button class="prode-btn-vamos" on:click={startTrivia}>
 							¡VAMOS!
@@ -1239,47 +1285,54 @@
 
 	/* ─── HEADER PERSONAL ─── */
 	.prode-header {
+		background: #0d1e35;
+		border-radius: 16px;
+		overflow: hidden;
+		border: 1px solid rgba(255,255,255,0.1);
+		box-shadow: 0 4px 24px rgba(0,0,0,0.3);
+	}
+	.prode-header-main {
 		display: flex;
 		align-items: center;
-		gap: 16px;
-		padding: 20px;
+		gap: 14px;
+		padding: 20px 20px 16px;
 	}
 	.prode-avatar-wrap {
 		position: relative;
 		flex-shrink: 0;
 	}
 	.prode-avatar {
-		width: 64px;
-		height: 64px;
+		width: 72px;
+		height: 72px;
 		border-radius: 50%;
 		object-fit: cover;
-		border: 2px solid rgba(255,255,255,0.8);
-		box-shadow: 0 2px 12px rgba(0,0,0,0.12);
+		border: 2px solid rgba(255,255,255,0.3);
+		box-shadow: 0 4px 16px rgba(0,0,0,0.3);
 	}
 	.prode-avatar-placeholder {
-		width: 64px;
-		height: 64px;
+		width: 72px;
+		height: 72px;
 		border-radius: 50%;
 		background: linear-gradient(135deg, var(--celeste), var(--celeste-dim));
 		color: #fff;
 		font-family: 'Inter', sans-serif;
-		font-size: 26px;
+		font-size: 28px;
 		font-weight: 900;
 		display: flex;
 		align-items: center;
 		justify-content: center;
-		border: 2px solid rgba(255,255,255,0.8);
+		border: 2px solid rgba(255,255,255,0.3);
 	}
 	.prode-avatar-change {
 		position: absolute;
-		bottom: -2px;
-		right: -2px;
-		width: 24px;
-		height: 24px;
+		bottom: 0px;
+		right: 0px;
+		width: 22px;
+		height: 22px;
 		border-radius: 50%;
 		background: var(--celeste);
-		border: 2px solid #fff;
-		font-size: 11px;
+		border: 2px solid #0d1e35;
+		font-size: 10px;
 		cursor: pointer;
 		display: flex;
 		align-items: center;
@@ -1287,79 +1340,87 @@
 		transition: background 0.2s;
 	}
 	.prode-avatar-change:hover { background: var(--celeste-dim); }
-	.prode-header-info { flex: 1; }
-	.prode-welcome { font-size: 13px; color: var(--muted); }
+	.prode-header-info {
+		flex: 1;
+		min-width: 0;
+	}
+	.prode-welcome { font-size: 12px; color: rgba(255,255,255,0.45); margin-bottom: 1px; }
 	.prode-playername {
 		font-family: 'Inter', sans-serif;
-		font-size: 20px;
+		font-size: 40px;
 		font-weight: 800;
-		letter-spacing: -0.02em;
-		color: var(--text);
-		line-height: 1.2;
+		letter-spacing: -0.03em;
+		color: #fff;
+		line-height: 1.0;
+	}
+	.prode-playerlastname {
+		font-family: 'Inter', sans-serif;
+		font-size: 40px;
+		font-weight: 800;
+		letter-spacing: -0.03em;
+		color: #fff;
+		line-height: 1.0;
 	}
 	.prode-badge-ensayo {
 		display: inline-block;
 		font-family: 'Inter', monospace;
 		font-size: 9px;
 		letter-spacing: 0.12em;
-		color: #7a5f00;
-		background: rgba(245,194,0,0.2);
-		border: 1px solid rgba(245,194,0,0.4);
+		color: #c9960a;
+		background: rgba(245,194,0,0.15);
+		border: 1px solid rgba(245,194,0,0.35);
 		border-radius: 20px;
 		padding: 2px 8px;
-		margin-top: 4px;
+		margin-top: 6px;
 	}
 	.prode-header-stats {
 		display: flex;
-		align-items: center;
-		gap: 12px;
+		flex-direction: row;
+		align-items: flex-end;
+		gap: 20px;
 		flex-shrink: 0;
 	}
 	.prode-stat { text-align: center; }
 	.prode-stat-value {
 		font-family: 'DM Mono', monospace;
-		font-size: 22px;
+		font-size: 20px;
 		font-weight: 700;
-		color: var(--celeste);
+		color: #7ecfff;
 		line-height: 1;
 	}
 	.prode-stat-label {
-		font-family: 'DM Mono', monospace;
-		font-size: 9px;
-		letter-spacing: 0.1em;
+		font-family: 'Inter', sans-serif;
+		font-size: 11px;
+		letter-spacing: 0.06em;
 		text-transform: uppercase;
-		color: var(--muted);
+		color: rgba(255,255,255,0.45);
+		margin-top: 3px;
 	}
 	.prode-stat-trivia-total {
-		font-size: 13px;
+		font-size: 22px;
 		font-weight: 400;
-		opacity: 0.55;
+		opacity: 0.45;
 	}
-	.prode-stat-divider {
-		width: 1px;
-		height: 32px;
-		background: var(--border);
+	.prode-header-footer {
+		border-top: 1px solid rgba(255,255,255,0.07);
+		padding: 10px 20px;
+		display: flex;
+		justify-content: center;
 	}
 	.prode-header-logout {
 		display: flex;
 		align-items: center;
 		gap: 5px;
 		background: none;
-		border: 1px solid var(--border);
-		border-radius: 8px;
-		color: var(--muted);
-		font-family: 'DM Mono', monospace;
-		font-size: 11px;
-		letter-spacing: 0.04em;
-		padding: 6px 10px;
+		border: none;
+		color: rgba(255,255,255,0.35);
+		font-family: 'Inter', sans-serif;
+		font-size: 12px;
 		cursor: pointer;
-		transition: all 0.2s;
-		white-space: nowrap;
+		padding: 0;
+		transition: color 0.2s;
 	}
-	.prode-header-logout:hover {
-		border-color: var(--red);
-		color: var(--red);
-	}
+	.prode-header-logout:hover { color: #ff6b6b; }
 
 	/* ─── SECCIONES ─── */
 	.prode-section { display: flex; flex-direction: column; gap: 12px; }
@@ -1433,6 +1494,8 @@
 		text-align: center;
 		padding: 40px 24px;
 		gap: 8px;
+		background: #ffffff;
+		color: #0a1525;
 	}
 	.prode-trivia-icon { font-size: 48px; }
 	.prode-trivia-ready-title {
@@ -1440,8 +1503,9 @@
 		font-size: 24px;
 		font-weight: 800;
 		letter-spacing: -0.02em;
+		color: #0a1525;
 	}
-	.prode-trivia-ready-desc { font-size: 14px; color: var(--muted); }
+	.prode-trivia-ready-desc { font-size: 14px; color: #444; }
 
 	.prode-trivia-game { display: flex; flex-direction: column; gap: 12px; }
 	.prode-trivia-meta {

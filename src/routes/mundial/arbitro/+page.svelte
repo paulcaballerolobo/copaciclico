@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { onMount, onDestroy } from 'svelte';
 	import { supabase } from '$lib/supabase';
-	import { getSession, type MundialUser } from '$lib/mundial/auth';
+	import { getSession, logout, type MundialUser } from '$lib/mundial/auth';
 	import { formatDateAR, generateCode, flag } from '$lib/mundial/utils';
 
 	// ─── TIPOS ───────────────────────────────────────────────────
@@ -66,8 +66,10 @@
 		enabled_by_admin: boolean;
 		enabled_at: string | null;
 		started_at: string | null;
+		completed_at: string | null;
 		question_ids: string[];
 		answers: Array<{ question_id: string; selected: string; correct: boolean; time_taken_ms: number }>;
+		var_requests?: string[];
 	}
 
 	// ─── ESTADO ───────────────────────────────────────────────────
@@ -132,11 +134,15 @@
 
 	// Nueva pregunta trivia
 	let showAddQuestion = false;
-	let newQuestion = { question_text: '', option_a: '', option_b: '', option_c: '', option_d: '', correct_answer: 'a', difficulty: '1', category: '' };
+	let newQuestion = { question_text: '', option_a: '', option_b: '', option_c: '', option_d: '', correct_answer: 'a', difficulty: '1', category: '', explanation: '' };
 
 	// Bloqueo pregunta
 	let blockingQuestion: TriviaQuestion | null = null;
 	let blockReason = '';
+
+	// Trivia: filas expandidas por jugador
+	let expandedTrivaPlayers: Set<string> = new Set();
+	let triviaSubTab: 'players' | 'questions' = 'players';
 
 	// Pozo
 	let pozoSeedAmount = '';
@@ -233,7 +239,7 @@
 		const { data: qs } = await supabase.from('trivia_questions').select('*').order('created_at');
 		triviaQuestions = (qs ?? []) as TriviaQuestion[];
 
-		const { data: ts } = await supabase.from('trivia_sessions').select('*').order('created_at', { ascending: false });
+		const { data: ts } = await supabase.from('trivia_sessions').select('*').order('enabled_at', { ascending: false });
 		triviaSessions = (ts ?? []) as TriviaSession[];
 	}
 
@@ -631,11 +637,12 @@
 			option_d: newQuestion.option_d,
 			correct_answer: newQuestion.correct_answer,
 			difficulty: parseInt(newQuestion.difficulty),
-			category: newQuestion.category || null
+			category: newQuestion.category || null,
+			explanation: newQuestion.explanation || null
 		});
 		if (error) { alert('Error: ' + error.message); return; }
 		showAddQuestion = false;
-		newQuestion = { question_text: '', option_a: '', option_b: '', option_c: '', option_d: '', correct_answer: 'a', difficulty: '1', category: '' };
+		newQuestion = { question_text: '', option_a: '', option_b: '', option_c: '', option_d: '', correct_answer: 'a', difficulty: '1', category: '', explanation: '' };
 		await loadTrivia();
 	}
 
@@ -653,6 +660,7 @@
 			enabled_by_admin: true,
 			enabled_at: new Date().toISOString(),
 			started_at: null,
+			completed_at: null,
 			question_ids: [],
 			answers: []
 		};
@@ -674,42 +682,28 @@
 			const allIds = (qs ?? []).map((q: { id: string }) => q.id);
 			if (allIds.length === 0) { alert('No hay preguntas activas en el banco.'); triviaSessions = triviaSessions.filter(s => s.id !== optimisticSession.id); return; }
 
-			const questionIds = allIds.sort(() => Math.random() - 0.5).slice(0, 5);
+			// Excluir preguntas que este jugador ya vio en sesiones anteriores (evitar repetición)
+			const seenIds = new Set(
+				triviaSessions
+					.filter(s => s.user_id === userId)
+					.flatMap(s => s.question_ids ?? [])
+			);
+			const freshIds = allIds.filter((id: string) => !seenIds.has(id));
+			const pool = freshIds.length >= 5 ? freshIds : allIds;
+			const questionIds = pool.sort(() => Math.random() - 0.5).slice(0, 5);
 
-			const { data: existing } = await supabase
-				.from('trivia_sessions')
-				.select('id')
-				.eq('user_id', userId)
-				.eq('phase', weekPhase)
-				.maybeSingle();
-
-			if (existing) {
-				const { error } = await supabase.from('trivia_sessions').update({
-					status: 'ready',
-					enabled_by_admin: true,
-					enabled_at: new Date().toISOString(),
-					question_ids: questionIds,
-					answers: [],
-					score: 0,
-					points_earned: 0,
-					started_at: null,
-					completed_at: null
-				}).eq('id', existing.id);
-				if (error) { alert('Error al actualizar sesión: ' + error.message); }
-			} else {
-				const { error } = await supabase.from('trivia_sessions').insert({
-					user_id: userId,
-					phase: weekPhase,
-					level_chosen: 2,
-					question_ids: questionIds,
-					answers: [],
-					status: 'ready',
-					enabled_by_admin: true,
-					enabled_at: new Date().toISOString(),
-					is_rehearsal: isRehearsalMode
-				});
-				if (error) { alert('Error al crear sesión: ' + error.message); triviaSessions = triviaSessions.filter(s => s.id !== optimisticSession.id); }
-			}
+			const { error } = await supabase.from('trivia_sessions').insert({
+				user_id: userId,
+				phase: weekPhase,
+				level_chosen: 2,
+				question_ids: questionIds,
+				answers: [],
+				status: 'ready',
+				enabled_by_admin: true,
+				enabled_at: new Date().toISOString(),
+				is_rehearsal: isRehearsalMode
+			});
+			if (error) { alert('Error al crear sesión: ' + error.message); triviaSessions = triviaSessions.filter(s => s.id !== optimisticSession.id); }
 		} catch (e) {
 			// Si algo falla, quitar la sesión optimista para desbloquear el botón
 			triviaSessions = triviaSessions.filter(s => s.id !== optimisticSession.id);
@@ -792,8 +786,7 @@
 	function triviaCountForUser(userId: string): { done: number; total: number } {
 		const userSessions = triviaSessions.filter(s => s.user_id === userId && !s.id.startsWith('optimistic'));
 		const done = userSessions.filter(s => s.status === 'completed').length;
-		// Total = semanas transcurridas (currentWeek viene de config)
-		const total = currentWeek;
+		const total = userSessions.length;
 		return { done, total };
 	}
 
@@ -801,24 +794,25 @@
 	function triviaBtnState(userId: string, _now: number): {
 		disabled: boolean;
 		label: string;
-		variant: 'default' | 'activated' | 'activated-live';
+		variant: 'default' | 'activated' | 'activated-live' | 'done';
 	} {
-		// Buscar sesión activa de esta semana
-		const weekPhase = `week_${currentWeek}`;
 		const active = triviaSessions.find(
 			(s) => s.user_id === userId && (s.status === 'ready' || s.status === 'in_progress')
 		);
 
-		if (!active) {
-			return { disabled: false, label: 'Activar trivia', variant: 'default' };
-		}
-
-		if (active.status === 'ready') {
+		if (active?.status === 'ready') {
 			return { disabled: true, label: 'Trivia activada', variant: 'activated' };
 		}
+		if (active?.status === 'in_progress') {
+			return { disabled: true, label: 'En progreso…', variant: 'activated-live' };
+		}
 
-		// in_progress
-		return { disabled: true, label: 'Trivia activada', variant: 'activated-live' };
+		// Sin sesión activa: ver si hay alguna completada
+		const hasDone = triviaSessions.some(s => s.user_id === userId && s.status === 'completed');
+		if (hasDone) {
+			return { disabled: false, label: 'Enviar otra trivia', variant: 'done' };
+		}
+		return { disabled: false, label: 'Activar trivia', variant: 'default' };
 	}
 
 	// suprimir el linter — weekPhase se calcula dentro de la función
@@ -826,23 +820,35 @@
 
 	// ─── HELPERS ──────────────────────────────────────────────────
 	function triviaStatusForUser(userId: string): string {
-		const weekPhase = `week_${currentWeek}`;
-		// Primero buscar la sesión de la semana actual
-		const s = triviaSessions.find((ts) => ts.user_id === userId && ts.phase === weekPhase)
-			?? triviaSessions.find((ts) => ts.user_id === userId && (ts.status === 'ready' || ts.status === 'in_progress'));
-		if (!s) {
-			// Tiene sesiones de otras semanas pero ninguna activa ahora
-			const any = triviaSessions.filter(ts => ts.user_id === userId && !ts.id.startsWith('optimistic'));
-			return any.length > 0 ? '—' : '—';
-		}
-		const map: Record<string, string> = {
-			pending: 'Pendiente',
-			ready: 'Esperando',
-			in_progress: 'En progreso',
-			completed: `Hecha (${s.score}/5)`
-		};
-		return map[s.status] ?? s.status;
+		const sessions = triviaSessions.filter(s => s.user_id === userId && !s.id.startsWith('optimistic'));
+		const active = sessions.find(s => s.status === 'ready' || s.status === 'in_progress');
+		if (active?.status === 'ready') return 'Esperando';
+		if (active?.status === 'in_progress') return 'En progreso';
+		const completed = sessions.filter(s => s.status === 'completed');
+		if (completed.length === 0) return '—';
+		const totalCorrect = completed.reduce((acc, s) => acc + (s.score ?? 0), 0);
+		const totalQ = completed.reduce((acc, s) => acc + (s.question_ids?.length ?? 5), 0);
+		return `✓ ${totalCorrect}/${totalQ}`;
 	}
+
+	function sessionsForUser(userId: string): TriviaSession[] {
+		return triviaSessions
+			.filter(s => s.user_id === userId && !s.id.startsWith('optimistic'))
+			.sort((a, b) => (b.enabled_at ?? '').localeCompare(a.enabled_at ?? ''));
+	}
+
+	function triviaPhaseLabel(phase: string): string {
+		const m = phase.match(/^week_(\d+)$/);
+		if (m) return `Semana ${m[1]}`;
+		return phase;
+	}
+
+	$: varRequestedIds = new Set(triviaSessions.flatMap(s => s.var_requests ?? []));
+	$: sortedQuestions = [...triviaQuestions].sort((a, b) => {
+		const aVar = varRequestedIds.has(a.id) ? 0 : 1;
+		const bVar = varRequestedIds.has(b.id) ? 0 : 1;
+		return aVar - bVar;
+	});
 
 	function matchesByWeek(week: number) {
 		return matches.filter((m) => m.week_number === week);
@@ -897,6 +903,9 @@
 				<div class="admin-mode-badge" class:ensayo={isRehearsalMode} class:real={!isRehearsalMode}>
 					{isRehearsalMode ? '⚠️ MODO ENSAYO' : '🟢 MODO REAL'}
 				</div>
+				<button class="admin-logout-btn" on:click={() => logout()}>
+					Cerrar sesión
+				</button>
 			</div>
 		</div>
 
@@ -1338,7 +1347,17 @@
 					<h2 class="admin-section-title">Trivia</h2>
 				</div>
 
+				<!-- Sub-tabs -->
+				<div class="admin-trivia-subtabs">
+					<button class="admin-trivia-subtab" class:active={triviaSubTab === 'players'} on:click={() => triviaSubTab = 'players'}>Jugadores</button>
+					<button class="admin-trivia-subtab" class:active={triviaSubTab === 'questions'} on:click={() => triviaSubTab = 'questions'}>
+						Preguntas ({triviaQuestions.length})
+						{#if varRequestedIds.size > 0}<span class="admin-trivia-var-dot">{varRequestedIds.size}</span>{/if}
+					</button>
+				</div>
+
 				<!-- Estado por jugador -->
+				{#if triviaSubTab === 'players'}
 				<div class="admin-subsection">
 					<h3 class="admin-subsection-title">Estado por jugador</h3>
 					<div class="admin-players-table">
@@ -1351,28 +1370,72 @@
 						{#each players.filter(p => !p.is_admin) as player}
 							{@const btn = triviaBtnState(player.id, now)}
 							{@const count = triviaCountForUser(player.id)}
-							<div class="admin-trivia-row">
-								<span class="admin-trivia-name">{player.full_name}</span>
+							{@const sessions = sessionsForUser(player.id)}
+							{@const expanded = expandedTrivaPlayers.has(player.id)}
+							<div class="admin-trivia-row"
+								class:admin-trivia-row-expandable={sessions.length > 0}
+								on:click={() => {
+									if (sessions.length === 0) return;
+									const next = new Set(expandedTrivaPlayers);
+									next.has(player.id) ? next.delete(player.id) : next.add(player.id);
+									expandedTrivaPlayers = next;
+								}}
+							>
+								<span class="admin-trivia-name">
+									{player.full_name}
+									{#if sessions.length > 0}
+										<span class="admin-trivia-expand-arrow" class:open={expanded}>›</span>
+									{/if}
+								</span>
 								<span class="admin-trivia-count">
 									<span class="admin-trivia-count-done">{count.done}</span>
-									<span class="admin-trivia-count-sep">/</span>
-									<span class="admin-trivia-count-total">{count.total}</span>
-									<span class="admin-trivia-count-label">sem.</span>
+									<span class="admin-trivia-count-label">hechas</span>
 								</span>
 								<span class="mono admin-trivia-status">{triviaStatusForUser(player.id)}</span>
 								<button
 									class="admin-trivia-btn admin-trivia-btn-{btn.variant}"
 									disabled={btn.disabled}
-									on:click={() => enableTrivia(player.id)}
+									on:click|stopPropagation={() => enableTrivia(player.id)}
 								>
 									{btn.label}
 								</button>
 							</div>
+							{#if expanded && sessions.length > 0}
+								<div class="admin-trivia-sessions">
+									{#each sessions as s}
+										{@const varRequested = (s.var_requests ?? []).length}
+										{@const varAccepted = (s.var_requests ?? []).filter(id => triviaQuestions.find(q => q.id === id && !q.is_active)).length}
+										{@const wrongCount = s.status === 'completed' ? (s.question_ids?.length ?? 5) - (s.score ?? 0) : null}
+										{@const ptsLost = wrongCount !== null ? wrongCount * triviaPenalty : null}
+										<div class="admin-trivia-session-row">
+											<span class="admin-trivia-session-phase">{triviaPhaseLabel(s.phase)}</span>
+											<span class="admin-trivia-session-status admin-trivia-session-status-{s.status}">
+												{#if s.status === 'completed'}
+													✓ {s.score}/{s.question_ids?.length ?? 5} · +{s.points_earned} pts
+												{:else if s.status === 'in_progress'}En progreso
+												{:else if s.status === 'ready'}Esperando
+												{:else}{s.status}{/if}
+											</span>
+											{#if ptsLost !== null && ptsLost > 0}
+												<span class="admin-trivia-session-lost">−{ptsLost} pts</span>
+											{/if}
+											{#if varRequested > 0}
+												<span class="admin-trivia-var-badge">VAR {varAccepted}/{varRequested}</span>
+											{/if}
+											{#if s.enabled_at}
+												<span class="admin-trivia-session-date mono">{new Date(s.enabled_at).toLocaleDateString('es-AR', { day:'2-digit', month:'2-digit' })}</span>
+											{/if}
+										</div>
+									{/each}
+								</div>
+							{/if}
 						{/each}
 					</div>
 				</div>
+				{/if}
 
 				<!-- Banco de preguntas -->
+				{#if triviaSubTab === 'questions'}
 				<div class="admin-subsection">
 					<div class="admin-section-head">
 						<h3 class="admin-subsection-title">Banco de preguntas ({triviaQuestions.length})</h3>
@@ -1416,36 +1479,38 @@
 									<input type="text" bind:value={newQuestion.category} placeholder="Historia" />
 								</div>
 							</div>
+							<div class="prode-field">
+								<label>Explicación (opcional)</label>
+								<textarea bind:value={newQuestion.explanation} rows="2" placeholder="La primera Copa del Mundo se jugó en Uruguay en 1930…"></textarea>
+							</div>
 							<button class="prode-btn-primary" on:click={addQuestion}>Guardar pregunta</button>
 						</div>
 					{/if}
 
 					<div class="admin-questions-list">
-						{#each triviaQuestions as q}
-							<div class="admin-question-row card" class:blocked={!q.is_active}>
-								<div class="admin-q-head">
-									<span class="admin-q-diff">Dif. {q.difficulty}</span>
+						{#each sortedQuestions as q, qi}
+							{@const isVar = varRequestedIds.has(q.id)}
+							<div class="admin-q-row" class:admin-q-row-alt={qi % 2 === 1} class:admin-q-row-blocked={!q.is_active} class:admin-q-row-var={isVar}>
+								<span class="admin-q-diff-tag">DIF:{q.difficulty}</span>
+								<span class="admin-q-inline-text">{q.question_text}</span>
+								<span class="admin-q-inline-opts">
+									{#each ['a','b','c','d'] as opt}
+										<span class="admin-q-inline-opt" class:admin-q-inline-correct={opt === q.correct_answer}>
+											{opt.toUpperCase()}) {q[`option_${opt}` as keyof TriviaQuestion]}
+										</span>
+									{/each}
+								</span>
+								<span class="admin-q-inline-actions">
+									{#if isVar}<span class="admin-q-var-badge">⚑ VAR</span>{/if}
 									{#if !q.is_active}
-										<span class="admin-q-blocked">BLOQUEADA</span>
-									{/if}
-									{#if q.is_active}
+										<span class="admin-q-blocked">BLOQ.</span>
+									{:else}
 										<button class="admin-btn-mini admin-btn-danger-mini"
 											on:click={() => { blockingQuestion = q; blockReason = ''; }}>
 											Bloquear
 										</button>
 									{/if}
-								</div>
-								<p class="admin-q-text">{q.question_text}</p>
-								<div class="admin-q-opts">
-									{#each ['a','b','c','d'] as opt}
-										<span class="admin-q-opt" class:correct={opt === q.correct_answer}>
-											{opt.toUpperCase()}) {q[`option_${opt}` as keyof TriviaQuestion]}
-										</span>
-									{/each}
-								</div>
-								{#if q.block_reason}
-									<p class="admin-q-blockreason">Motivo: {q.block_reason}</p>
-								{/if}
+								</span>
 							</div>
 						{/each}
 					</div>
@@ -1467,6 +1532,7 @@
 						</div>
 					{/if}
 				</div>
+				{/if}
 			</section>
 		{/if}
 
@@ -1597,6 +1663,19 @@
 	}
 	.admin-mode-badge.ensayo { color: #7a5f00; border-color: rgba(245,194,0,0.5); background: rgba(245,194,0,0.12); }
 	.admin-mode-badge.real { color: var(--green); border-color: rgba(26,158,106,0.4); background: rgba(26,158,106,0.08); }
+	.admin-header-right { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
+	.admin-logout-btn {
+		font-family: 'Inter', sans-serif;
+		font-size: 11px;
+		color: var(--muted);
+		background: none;
+		border: none;
+		cursor: pointer;
+		padding: 0;
+		text-decoration: underline;
+		text-underline-offset: 2px;
+	}
+	.admin-logout-btn:hover { color: var(--red); }
 
 	/* ─── MODO ─── */
 	.admin-mode-section,
@@ -1917,6 +1996,101 @@
 	.admin-btn-mini:hover { border-color: var(--celeste); color: var(--celeste); }
 	.admin-btn-danger-mini:hover { border-color: var(--red); color: var(--red); }
 
+	/* ── Sub-tabs trivia ── */
+	.admin-trivia-subtabs {
+		display: flex;
+		gap: 0;
+		border-bottom: 1px solid var(--border);
+	}
+	.admin-trivia-subtab {
+		font-family: 'Inter', monospace;
+		font-size: 12px;
+		font-weight: 600;
+		letter-spacing: 0.06em;
+		padding: 9px 20px;
+		border: none;
+		border-bottom: 2px solid transparent;
+		background: none;
+		color: var(--muted);
+		cursor: pointer;
+		transition: all 0.2s;
+		display: flex;
+		align-items: center;
+		gap: 6px;
+	}
+	.admin-trivia-subtab:hover { color: var(--text); }
+	.admin-trivia-subtab.active { color: var(--celeste); border-bottom-color: var(--celeste); }
+	.admin-trivia-var-dot {
+		background: var(--red);
+		color: #fff;
+		font-size: 10px;
+		font-weight: 800;
+		padding: 1px 5px;
+		border-radius: 10px;
+		line-height: 1.4;
+	}
+
+	/* ── Filas de preguntas (fila única) ── */
+	.admin-questions-list { display: flex; flex-direction: column; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+	.admin-q-row {
+		display: flex;
+		align-items: center;
+		gap: 10px;
+		padding: 9px 14px;
+		font-size: 12px;
+		border-top: 1px solid var(--border);
+		transition: background 0.15s;
+	}
+	.admin-q-row:first-child { border-top: none; }
+	.admin-q-row-alt { background: rgba(91,155,213,0.03); }
+	.admin-q-row-blocked { opacity: 0.45; }
+	.admin-q-row-var { border-left: 3px solid var(--red) !important; }
+	.admin-q-diff-tag {
+		font-family: 'DM Mono', monospace;
+		font-size: 10px;
+		font-weight: 700;
+		color: var(--celeste);
+		background: rgba(91,155,213,0.1);
+		padding: 2px 6px;
+		border-radius: 4px;
+		white-space: nowrap;
+		flex-shrink: 0;
+	}
+	.admin-q-inline-text {
+		flex: 1 1 180px;
+		min-width: 0;
+		font-weight: 600;
+		color: var(--text);
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+	.admin-q-inline-opts {
+		display: flex;
+		gap: 8px;
+		flex: 2 1 300px;
+		flex-wrap: wrap;
+		min-width: 0;
+	}
+	.admin-q-inline-opt {
+		color: var(--muted);
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		max-width: 120px;
+	}
+	.admin-q-inline-correct {
+		color: var(--celeste);
+		font-weight: 700;
+	}
+	.admin-q-inline-actions {
+		display: flex;
+		align-items: center;
+		gap: 6px;
+		flex-shrink: 0;
+		margin-left: auto;
+	}
+
 	/* ── Fila trivia: grid propio (no reutiliza el de jugadores que tiene 7 cols) ── */
 	.admin-trivia-header { grid-template-columns: 1fr 90px 1fr auto !important; }
 	.admin-trivia-row {
@@ -1943,6 +2117,77 @@
 	.admin-trivia-count-sep { color: var(--muted); }
 	.admin-trivia-count-total { color: var(--muted); }
 	.admin-trivia-count-label { font-size: 10px; color: var(--muted); margin-left: 3px; }
+
+	.admin-trivia-row-expandable { cursor: pointer; }
+	.admin-trivia-row-expandable:hover { background: rgba(91,155,213,0.05) !important; }
+	.admin-trivia-expand-arrow {
+		display: inline-block;
+		font-size: 14px;
+		color: var(--muted);
+		margin-left: 4px;
+		transition: transform 0.2s;
+	}
+	.admin-trivia-expand-arrow.open { transform: rotate(90deg); }
+
+	/* ── Detalle de sesiones expandido ── */
+	.admin-trivia-sessions {
+		border-top: 1px solid var(--border);
+		display: flex;
+		flex-direction: column;
+		gap: 0;
+		background: rgba(0,0,0,0.15);
+	}
+	.admin-trivia-session-row {
+		display: flex;
+		align-items: center;
+		gap: 12px;
+		padding: 8px 16px 8px 32px;
+		font-size: 12px;
+		border-top: 1px solid rgba(255,255,255,0.04);
+	}
+	.admin-trivia-session-phase {
+		font-family: 'DM Mono', monospace;
+		color: var(--muted);
+		min-width: 60px;
+	}
+	.admin-trivia-session-date { color: var(--muted); font-size: 11px; margin-left: auto; }
+	.admin-trivia-session-status { font-weight: 600; }
+	.admin-trivia-session-status-completed { color: var(--celeste); }
+	.admin-trivia-session-status-in_progress { color: var(--amarillo, #f5c200); }
+	.admin-trivia-session-status-ready { color: var(--muted); }
+	.admin-trivia-session-lost {
+		font-family: 'DM Mono', monospace;
+		font-size: 11px;
+		color: var(--red);
+		font-weight: 600;
+	}
+	.admin-trivia-var-badge {
+		font-family: 'Inter', monospace;
+		font-size: 11px;
+		font-weight: 700;
+		letter-spacing: 0.08em;
+		color: var(--red);
+		background: rgba(217,48,37,0.12);
+		border: 1px solid rgba(217,48,37,0.4);
+		border-radius: 4px;
+		padding: 1px 6px;
+		margin-left: auto;
+	}
+
+	/* ── VAR en banco de preguntas ── */
+	.admin-q-var { border-left: 3px solid var(--red) !important; }
+	.admin-q-var-badge {
+		font-family: 'Inter', monospace;
+		font-size: 11px;
+		font-weight: 800;
+		letter-spacing: 0.1em;
+		color: #fff;
+		background: var(--red);
+		border-radius: 4px;
+		padding: 2px 7px;
+		animation: varPulse 1.5s ease-in-out infinite;
+	}
+	@keyframes varPulse { 0%,100%{opacity:1} 50%{opacity:0.7} }
 
 	/* ── Botón Activar Trivia — variantes de estado ── */
 	.admin-trivia-btn {
@@ -1988,13 +2233,13 @@
 	}
 	/* done: completada, se puede reactivar */
 	.admin-trivia-btn-done {
-		background: rgba(26,158,106,0.08);
-		border-color: rgba(26,158,106,0.35);
-		color: var(--green);
+		background: #ffffff;
+		border-color: rgba(91,155,213,0.5);
+		color: #0a1525;
 	}
 	.admin-trivia-btn-done:hover {
-		background: rgba(26,158,106,0.16);
-		border-color: var(--green);
+		background: #f0f4ff;
+		border-color: var(--celeste);
 	}
 	.admin-trivia-btn-loading {
 		background: rgba(255,255,255,0.05);

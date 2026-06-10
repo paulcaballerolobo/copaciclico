@@ -44,6 +44,7 @@
 		score: number;
 		points_earned: number;
 		status: string;
+		var_requests?: string[];
 	}
 
 	// ─── ESTADO ───────────────────────────────────────────────────
@@ -158,11 +159,17 @@
 				async (payload) => {
 					const updated = payload.new as TriviaSession;
 					if (!updated) return;
+					// Nueva sesión (INSERT) o sesión distinta activada → resetear juego
+					const isNewSession = !triviaSession || updated.id !== triviaSession.id;
 					triviaSession = updated;
-					if (updated.status === 'ready' && loadingState === 'no-session') {
+					if (updated.status === 'ready' && (loadingState === 'no-session' || isNewSession)) {
 						if (updated.question_ids?.length) await loadQuestions(updated.question_ids);
 						loadingState = 'ready';
 						gamePhase = 'idle';
+						currentIdx = 0;
+						correctCount = 0;
+						selectedAnswer = null;
+						if (timerInterval) clearInterval(timerInterval);
 					}
 				}
 			)
@@ -269,19 +276,21 @@
 		gamePhase = 'done';
 	}
 
-	// ─── IMPUGNAR ────────────────────────────────────────────────
-	async function impugnarQuestion(questionId: string, questionText: string) {
+	// ─── IMPUGNAR (VAR) ─────────────────────────────────────────
+	async function impugnarQuestion(questionId: string) {
+		if (!triviaSession) return;
 		reportingQuestion = questionId;
-		const username = triviaUser?.username ?? 'jugador';
-		const note = `[IMPUGNADA por @${username}] ${questionText.slice(0, 60)}`;
 
-		// Escribir en block_reason para que el árbitro lo vea destacado
+		const current = triviaSession.var_requests ?? [];
+		if (current.includes(questionId)) { reportingQuestion = null; return; }
+
+		const updated = [...current, questionId];
 		await supabase
-			.from('trivia_questions')
-			.update({ block_reason: note })
-			.eq('id', questionId)
-			.is('is_active', true);  // solo si aún está activa
+			.from('trivia_sessions')
+			.update({ var_requests: updated })
+			.eq('id', triviaSession.id);
 
+		triviaSession = { ...triviaSession, var_requests: updated };
 		reportedQuestions = new Set([...reportedQuestions, questionId]);
 		reportingQuestion = null;
 	}
@@ -565,7 +574,7 @@
 												<button
 													class="tv-impugnar-btn"
 													disabled={reportingQuestion === q.id}
-													on:click={() => impugnarQuestion(q.id, q.question_text)}
+													on:click={() => impugnarQuestion(q.id)}
 												>
 													{reportingQuestion === q.id ? '⏳ Enviando…' : '🚩 Impugnar esta pregunta'}
 												</button>
