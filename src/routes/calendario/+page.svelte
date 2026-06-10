@@ -19,6 +19,7 @@
 		code: string;
 		name: string;
 		flag: string;
+		is_placeholder: boolean;
 	}
 
 	let matches: MatchRow[] = [];
@@ -74,7 +75,7 @@
 	onMount(async () => {
 		const [{ data: matchData }, { data: teamData }] = await Promise.all([
 			supabase.from('matches').select('id, match_number, match_label, phase, group_name, kickoff_time, team_home, team_away, venue, status').eq('phase', 'groups').order('kickoff_time'),
-			supabase.from('teams').select('code, name, flag')
+			supabase.from('teams').select('code, name, flag, is_placeholder')
 		]);
 		matches = (matchData ?? []) as MatchRow[];
 		teams = Object.fromEntries(((teamData ?? []) as TeamRow[]).map(t => [t.code, t]));
@@ -89,6 +90,8 @@
 	function pad(n: number) { return String(n).padStart(2, '0'); }
 	function name(code: string) { return teams[code]?.name ?? code; }
 	function flag(code: string) { return teams[code]?.flag ?? '🏳'; }
+	function isPlaceholder(code: string) { return teams[code]?.is_placeholder ?? false; }
+	function teamCode(code: string) { return isPlaceholder(code) ? '???' : code; }
 	function isArg(m: MatchRow) { return m.team_home === 'ARG' || m.team_away === 'ARG'; }
 </script>
 
@@ -158,14 +161,14 @@
 						<div class="mc-team mc-home">
 							<span class="mc-flag">{flag(m.team_home)}</span>
 							<div class="mc-team-info">
-								<span class="mc-code">{m.team_home}</span>
+								<span class="mc-code" class:mc-tbd={isPlaceholder(m.team_home)}>{teamCode(m.team_home)}</span>
 								<span class="mc-name">{name(m.team_home)}</span>
 							</div>
 						</div>
 						<div class="mc-vs">vs</div>
 						<div class="mc-team mc-away">
 							<div class="mc-team-info mc-team-info-right">
-								<span class="mc-code">{m.team_away}</span>
+								<span class="mc-code" class:mc-tbd={isPlaceholder(m.team_away)}>{teamCode(m.team_away)}</span>
 								<span class="mc-name">{name(m.team_away)}</span>
 							</div>
 							<span class="mc-flag">{flag(m.team_away)}</span>
@@ -364,6 +367,7 @@
 		color: rgba(255,255,255,0.55);
 		font-weight: 400;
 	}
+	.mc-tbd { color: rgba(255,255,255,0.35) !important; font-style: italic; letter-spacing: 0; }
 	.mc-vs {
 		font-family: 'DM Mono', monospace;
 		font-size: 10px;
