@@ -774,9 +774,9 @@
 						<p class="prode-trivia-ready-desc">
 							{triviaQuestions.length > 0 ? triviaQuestions.length : 5} preguntas · 20 seg por pregunta · hasta <strong>{triviaMaxPoints(triviaSession)} pts</strong>
 						</p>
-						<button class="prode-btn-vamos" on:click={startTrivia}>
+						<a href="/mundial/trivia?J={user.username}" class="prode-btn-vamos">
 							¡VAMOS!
-						</button>
+						</a>
 					</div>
 
 				{:else if triviaPhase === 'question' || triviaPhase === 'reveal'}
