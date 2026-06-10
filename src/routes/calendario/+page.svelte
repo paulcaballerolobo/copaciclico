@@ -93,9 +93,6 @@
 </script>
 
 <div class="section">
-	<div class="section-hero-label">Fase de grupos</div>
-	<div class="section-title">Calendario</div>
-	<div class="section-subtitle">72 partidos · Grupos A–L · Horarios en hora argentina (UTC-3)</div>
 
 	<!-- Card Argentina -->
 	<div class="arg-card">
@@ -190,7 +187,6 @@
 		</div>
 	{/if}
 
-	<p class="nota">Horarios en UTC-3 (Argentina). Datos de FIFA.</p>
 </div>
 
 <style>
@@ -319,10 +315,10 @@
 		white-space: nowrap;
 		transition: all 0.15s;
 	}
-	.filter-pill:hover { background: rgba(255,255,255,0.12); color: #fff; }
-	.filter-pill.active { background: #fff; color: #0a0a14; border-color: #fff; font-weight: 700; }
+	.filter-pill:hover { background: rgba(255,255,255,0.1); color: #fff; }
+	.filter-pill.active { background: var(--celeste); color: #fff; border-color: var(--celeste); font-weight: 700; }
 	.pill-arg { color: var(--celeste) !important; border-color: rgba(91,155,213,0.3) !important; }
-	.pill-arg.active { background: var(--celeste) !important; color: #fff !important; border-color: var(--celeste) !important; }
+	.pill-arg.active { background: var(--celeste) !important; border-color: var(--celeste) !important; }
 
 	/* ── LOADING ── */
 	.loading { text-align: center; padding: 40px; color: var(--muted); font-family: 'DM Mono', monospace; font-size: 13px; }
