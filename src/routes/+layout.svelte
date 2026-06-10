@@ -109,6 +109,17 @@
 	onDestroy(() => { if (interval) clearInterval(interval); });
 </script>
 
+<svelte:head>
+	<!-- Google Analytics -->
+	<script async src="https://www.googletagmanager.com/gtag/js?id=G-6E61WCES13"></script>
+	<script>
+		window.dataLayer = window.dataLayer || [];
+		function gtag(){dataLayer.push(arguments);}
+		gtag('js', new Date());
+		gtag('config', 'G-6E61WCES13');
+	</script>
+</svelte:head>
+
 {#if !$page.url.pathname.startsWith('/mundial/trivia')}
 <nav>
 	<div class="nav-main">
