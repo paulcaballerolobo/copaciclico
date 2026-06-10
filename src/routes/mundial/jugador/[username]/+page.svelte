@@ -662,6 +662,19 @@
 						<div class="prode-stat-label">ranking</div>
 					</div>
 				{/if}
+				<div class="prode-stat-divider"></div>
+				<button
+					class="prode-header-logout"
+					on:click={() => { localStorage.removeItem('mundial_user'); location.reload(); }}
+					title="Cerrar sesión"
+				>
+					<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+						<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+						<polyline points="16 17 21 12 16 7"/>
+						<line x1="21" y1="12" x2="9" y2="12"/>
+					</svg>
+					Salir
+				</button>
 			</div>
 		</header>
 
@@ -669,6 +682,11 @@
 		{#if triviaSession && (triviaSession.status === 'ready' || triviaSession.status === 'in_progress')}
 			<section class="prode-section prode-trivia-section">
 				<div class="section-hero-label">Trivia habilitada</div>
+
+				<!-- BOTÓN ROJO: IR A LA PANTALLA DE TRIVIA -->
+				<a href="/mundial/trivia?J={user.username}" class="prode-btn-trivia-go">
+					🎯 Ir a la Trivia
+				</a>
 
 				{#if triviaPhase === 'idle'}
 					<!-- Botón de arranque -->
@@ -1287,6 +1305,26 @@
 		height: 32px;
 		background: var(--border);
 	}
+	.prode-header-logout {
+		display: flex;
+		align-items: center;
+		gap: 5px;
+		background: none;
+		border: 1px solid var(--border);
+		border-radius: 8px;
+		color: var(--muted);
+		font-family: 'DM Mono', monospace;
+		font-size: 11px;
+		letter-spacing: 0.04em;
+		padding: 6px 10px;
+		cursor: pointer;
+		transition: all 0.2s;
+		white-space: nowrap;
+	}
+	.prode-header-logout:hover {
+		border-color: var(--red);
+		color: var(--red);
+	}
 
 	/* ─── SECCIONES ─── */
 	.prode-section { display: flex; flex-direction: column; gap: 12px; }
@@ -1324,6 +1362,35 @@
 
 	/* ─── TRIVIA ─── */
 	.prode-trivia-section {}
+
+	/* Botón rojo "Ir a la Trivia" */
+	.prode-btn-trivia-go {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		gap: 8px;
+		width: 100%;
+		padding: 16px;
+		border-radius: 12px;
+		background: var(--red, #D93025);
+		color: white;
+		font-family: 'Inter', sans-serif;
+		font-size: 16px;
+		font-weight: 800;
+		text-decoration: none;
+		letter-spacing: 0.01em;
+		margin-bottom: 12px;
+		transition: all 0.2s;
+		animation: triviaGlow 2s ease-in-out infinite;
+	}
+	.prode-btn-trivia-go:hover {
+		background: #b02820;
+		transform: translateY(-1px);
+	}
+	@keyframes triviaGlow {
+		0%, 100% { box-shadow: 0 0 0 0 rgba(217,48,37,0); }
+		50% { box-shadow: 0 0 16px 4px rgba(217,48,37,0.35); }
+	}
 	.prode-trivia-ready {
 		display: flex;
 		flex-direction: column;

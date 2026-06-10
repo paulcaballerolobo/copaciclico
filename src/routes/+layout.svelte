@@ -7,7 +7,8 @@
 		{ href: '/datos', label: 'Mundial de los Datos' },
 		{ href: '/paises', label: 'Países' },
 		{ href: '/stats', label: 'Estadísticas' },
-		{ href: '/mundial', label: '🏆 Prode Cíclico', prode: true }
+		{ href: '/mundial', label: '🏆 Prode Cíclico', prode: true },
+		{ href: '/mundial/trivia', label: '🎯 Trivia', trivia: true }
 	];
 </script>
 
@@ -20,8 +21,9 @@
 				<a
 					href={tab.href}
 					class="nav-tab"
-					class:active={tab.prode ? $page.url.pathname.startsWith('/mundial') : $page.url.pathname === tab.href}
+					class:active={tab.trivia ? $page.url.pathname.startsWith('/mundial/trivia') : tab.prode ? ($page.url.pathname.startsWith('/mundial') && !$page.url.pathname.startsWith('/mundial/trivia')) : $page.url.pathname === tab.href}
 					class:nav-tab-prode={tab.prode}
+					class:nav-tab-trivia={tab.trivia}
 				>{tab.label}</a>
 		{/each}
 	</div>
@@ -75,6 +77,8 @@
 	.nav-tab.active { color: #fff; background: rgba(255,255,255,0.1); }
 	.nav-tab-prode { color: var(--amarillo-dim) !important; }
 	.nav-tab-prode.active { background: rgba(245,194,0,0.12); color: var(--amarillo-dim) !important; }
+	.nav-tab-trivia { color: rgba(255,100,80,0.85) !important; }
+	.nav-tab-trivia.active { background: rgba(255,85,0,0.12); color: rgba(255,85,0,1) !important; }
 	.logo-link {
 		display: flex;
 		align-items: center;

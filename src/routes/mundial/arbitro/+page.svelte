@@ -64,6 +64,10 @@
 		score: number;
 		points_earned: number;
 		enabled_by_admin: boolean;
+		enabled_at: string | null;
+		started_at: string | null;
+		question_ids: string[];
+		answers: Array<{ question_id: string; selected: string; correct: boolean; time_taken_ms: number }>;
 	}
 
 	// ─── ESTADO ───────────────────────────────────────────────────
@@ -613,45 +617,117 @@
 		await loadTrivia();
 	}
 
+	let enablingTrivia: Set<string> = new Set();
+
 	async function enableTrivia(userId: string) {
-		const session = triviaSessions.find((s) => s.user_id === userId);
-		// Asignar 5 preguntas aleatorias según el nivel
-		const { data: qs } = await supabase
-			.from('trivia_questions')
-			.select('id')
-			.eq('is_active', true)
-			.order('created_at');
+		if (enablingTrivia.has(userId)) return;
+		enablingTrivia = new Set([...enablingTrivia, userId]);
 
-		const questionIds = (qs ?? []).map((q: { id: string }) => q.id).slice(0, 5);
+		try {
+			// Preguntas activas aleatorias
+			const { data: qs, error: qErr } = await supabase
+				.from('trivia_questions')
+				.select('id')
+				.eq('is_active', true)
+				.order('created_at');
 
-		if (session) {
-			await supabase.from('trivia_sessions').update({
-				status: 'ready',
-				enabled_by_admin: true,
-				enabled_at: new Date().toISOString(),
-				question_ids: questionIds
-			}).eq('id', session.id);
-		} else {
-			await supabase.from('trivia_sessions').insert({
-				user_id: userId,
-				phase: currentPhase,
-				level_chosen: 2,
-				question_ids: questionIds,
-				status: 'ready',
-				enabled_by_admin: true,
-				enabled_at: new Date().toISOString(),
-				is_rehearsal: isRehearsalMode
-			});
+			if (qErr) { alert('Error al cargar preguntas: ' + qErr.message); return; }
+
+			const allIds = (qs ?? []).map((q: { id: string }) => q.id);
+			if (allIds.length === 0) { alert('No hay preguntas activas en el banco.'); return; }
+
+			// Mezclar aleatoriamente y tomar 5
+			const shuffled = allIds.sort(() => Math.random() - 0.5);
+			const questionIds = shuffled.slice(0, 5);
+
+			// Consultar Supabase directamente (no confiar en el estado en memoria)
+			const { data: existing } = await supabase
+				.from('trivia_sessions')
+				.select('id')
+				.eq('user_id', userId)
+				.eq('phase', currentPhase)
+				.maybeSingle();
+
+			if (existing) {
+				// Ya existe sesión para este usuario+fase → UPDATE
+				const { error } = await supabase.from('trivia_sessions').update({
+					status: 'ready',
+					enabled_by_admin: true,
+					enabled_at: new Date().toISOString(),
+					question_ids: questionIds,
+					answers: [],
+					score: 0,
+					points_earned: 0,
+					started_at: null,
+					completed_at: null
+				}).eq('id', existing.id);
+				if (error) { alert('Error al actualizar sesión: ' + error.message); return; }
+			} else {
+				// No existe → INSERT
+				const { error } = await supabase.from('trivia_sessions').insert({
+					user_id: userId,
+					phase: currentPhase,
+					level_chosen: 2,
+					question_ids: questionIds,
+					answers: [],
+					status: 'ready',
+					enabled_by_admin: true,
+					enabled_at: new Date().toISOString(),
+					is_rehearsal: isRehearsalMode
+				});
+				if (error) { alert('Error al crear sesión: ' + error.message); return; }
+			}
+
+			await loadTrivia();
+		} finally {
+			enablingTrivia = new Set([...enablingTrivia].filter(id => id !== userId));
 		}
-		await loadTrivia();
 	}
 
 	async function blockQuestion(q: TriviaQuestion) {
 		if (!blockReason.trim()) { alert('Escribí el motivo del bloqueo'); return; }
+
+		// 1. Marcar pregunta como inactiva
 		await supabase.from('trivia_questions').update({
 			is_active: false,
 			block_reason: blockReason
 		}).eq('id', q.id);
+
+		// 2. Recuperar puntos de jugadores que la respondieron mal
+		const { data: cfg } = await supabase.from('config').select('value').eq('key', 'trivia_penalty_points').single();
+		const penalty = parseInt(cfg?.value ?? '2');
+
+		const { data: allSessions } = await supabase
+			.from('trivia_sessions')
+			.select('id, user_id, answers, points_earned, status')
+			.eq('status', 'completed');
+
+		type SessionRow = { id: string; user_id: string; answers: TriviaSession['answers']; points_earned: number; status: string };
+		const affected = ((allSessions ?? []) as SessionRow[]).filter((s) =>
+			Array.isArray(s.answers) && s.answers.some((a) => a.question_id === q.id && !a.correct)
+		);
+
+		for (const session of affected) {
+			// Sumar el punto de penalidad que perdió por esta pregunta
+			const newPoints = (session.points_earned ?? 0) + penalty;
+			await supabase.from('trivia_sessions').update({ points_earned: newPoints }).eq('id', session.id);
+
+			// Acreditar al usuario si no es modo ensayo
+			if (!isRehearsalMode) {
+				const { data: usr } = await supabase.from('users').select('points_total').eq('id', session.user_id).single();
+				if (usr) {
+					await supabase.from('users').update({ points_total: (usr.points_total ?? 0) + penalty }).eq('id', session.user_id);
+				}
+			}
+		}
+
+		if (affected.length > 0) {
+			const msg = isRehearsalMode
+				? `Pregunta bloqueada. ${affected.length} jugador/es afectado/s (puntos NO acreditados — modo ensayo).`
+				: `Pregunta bloqueada. +${penalty} pts recuperados para ${affected.length} jugador/es.`;
+			alert(msg);
+		}
+
 		blockingQuestion = null;
 		blockReason = '';
 		await loadTrivia();
@@ -669,6 +745,50 @@
 	async function openPozo() {
 		await updateConfig('pozo_status', 'open');
 		pozoStatus = 'open';
+	}
+
+	// ─── TICKER para countdowns de trivia ────────────────────────
+	let now = Date.now();
+	let tickInterval: ReturnType<typeof setInterval> | null = null;
+
+	onMount(() => {
+		tickInterval = setInterval(() => { now = Date.now(); }, 1000);
+	});
+	onDestroy(() => { if (tickInterval) clearInterval(tickInterval); });
+
+	// Estado del botón "Activar trivia" para cada jugador
+	// Devuelve { disabled, label, variant }
+	function triviaBtnState(userId: string, _now: number): {
+		disabled: boolean;
+		label: string;
+		variant: 'default' | 'waiting' | 'live' | 'done';
+	} {
+		const s = triviaSessions.find((ts) => ts.user_id === userId);
+		if (!s) return { disabled: false, label: 'Activar trivia', variant: 'default' };
+
+		if (s.status === 'ready') {
+			// Habilitada pero el jugador no arrancó — mostrar tiempo transcurrido
+			const elapsed = s.enabled_at ? Math.floor((_now - new Date(s.enabled_at).getTime()) / 1000) : 0;
+			const mm = Math.floor(elapsed / 60).toString().padStart(2, '0');
+			const ss = (elapsed % 60).toString().padStart(2, '0');
+			return { disabled: true, label: `⏳ Esperando… ${mm}:${ss}`, variant: 'waiting' };
+		}
+
+		if (s.status === 'in_progress') {
+			// Calculamos cuánto tiempo MAX queda: n_preguntas × 20 s por pregunta
+			const totalSecs = (s.question_ids?.length ?? 5) * 20;
+			const startedMs = s.started_at ? new Date(s.started_at).getTime() : _now;
+			const remaining = Math.max(0, totalSecs - Math.floor((_now - startedMs) / 1000));
+			const mm = Math.floor(remaining / 60).toString().padStart(2, '0');
+			const ss = (remaining % 60).toString().padStart(2, '0');
+			return { disabled: true, label: `🔴 En juego  ${mm}:${ss}`, variant: 'live' };
+		}
+
+		if (s.status === 'completed') {
+			return { disabled: false, label: `↺ Volver a activar (${s.score}/${s.question_ids?.length ?? 5})`, variant: 'done' };
+		}
+
+		return { disabled: false, label: 'Activar trivia', variant: 'default' };
 	}
 
 	// ─── HELPERS ──────────────────────────────────────────────────
@@ -1188,10 +1308,18 @@
 							<span>Acción</span>
 						</div>
 						{#each players.filter(p => !p.is_admin) as player}
-							<div class="admin-player-row">
-								<span>{player.full_name}</span>
-								<span class="mono">{triviaStatusForUser(player.id)}</span>
-								<button class="admin-btn-mini" on:click={() => enableTrivia(player.id)}>Activar trivia</button>
+							{@const btn = triviaBtnState(player.id, now)}
+							{@const loading = enablingTrivia.has(player.id)}
+							<div class="admin-trivia-row">
+								<span class="admin-trivia-name">{player.full_name}</span>
+								<span class="mono admin-trivia-status">{triviaStatusForUser(player.id)}</span>
+								<button
+									class="admin-trivia-btn admin-trivia-btn-{loading ? 'loading' : btn.variant}"
+									disabled={btn.disabled || loading}
+									on:click={() => enableTrivia(player.id)}
+								>
+									{#if loading}⏳ Activando…{:else}{btn.label}{/if}
+								</button>
 							</div>
 						{/each}
 					</div>
@@ -1741,6 +1869,82 @@
 	}
 	.admin-btn-mini:hover { border-color: var(--celeste); color: var(--celeste); }
 	.admin-btn-danger-mini:hover { border-color: var(--red); color: var(--red); }
+
+	/* ── Fila trivia: grid propio (no reutiliza el de jugadores que tiene 7 cols) ── */
+	.admin-trivia-row {
+		display: grid;
+		grid-template-columns: 1fr 1fr auto;
+		gap: 12px;
+		align-items: center;
+		padding: 11px 16px;
+		border-top: 1px solid var(--border);
+		font-size: 13px;
+		transition: background 0.15s;
+	}
+	.admin-trivia-row:hover { background: rgba(91,155,213,0.02); }
+	.admin-trivia-name { font-weight: 500; }
+	.admin-trivia-status { font-family: 'DM Mono', monospace; font-size: 12px; color: var(--muted); }
+
+	/* ── Botón Activar Trivia — variantes de estado ── */
+	.admin-trivia-btn {
+		font-family: 'DM Mono', monospace;
+		font-size: 11px;
+		font-weight: 500;
+		letter-spacing: 0.04em;
+		border-radius: 6px;
+		padding: 5px 11px;
+		cursor: pointer;
+		transition: all 0.2s;
+		white-space: nowrap;
+		border: 1px solid;
+	}
+	/* default: disponible para activar */
+	.admin-trivia-btn-default {
+		background: rgba(91,155,213,0.08);
+		border-color: rgba(91,155,213,0.4);
+		color: var(--celeste);
+	}
+	.admin-trivia-btn-default:hover {
+		background: rgba(91,155,213,0.18);
+		border-color: var(--celeste);
+	}
+	/* waiting: habilitada, esperando que el jugador arranque */
+	.admin-trivia-btn-waiting {
+		background: rgba(245,194,0,0.1);
+		border-color: rgba(245,194,0,0.4);
+		color: #b8940a;
+		cursor: not-allowed;
+		opacity: 0.9;
+	}
+	/* live: jugador respondiendo en este momento */
+	.admin-trivia-btn-live {
+		background: rgba(217,48,37,0.1);
+		border-color: rgba(217,48,37,0.5);
+		color: var(--red);
+		cursor: not-allowed;
+		animation: triviaLivePulse 1.8s ease-in-out infinite;
+	}
+	@keyframes triviaLivePulse {
+		0%,100% { opacity: 1; }
+		50%      { opacity: 0.65; }
+	}
+	/* done: completada, se puede reactivar */
+	.admin-trivia-btn-done {
+		background: rgba(26,158,106,0.08);
+		border-color: rgba(26,158,106,0.35);
+		color: var(--green);
+	}
+	.admin-trivia-btn-done:hover {
+		background: rgba(26,158,106,0.16);
+		border-color: var(--green);
+	}
+	.admin-trivia-btn-loading {
+		background: rgba(255,255,255,0.05);
+		border-color: rgba(255,255,255,0.15);
+		color: var(--muted);
+		cursor: not-allowed;
+	}
+	.admin-trivia-btn:disabled { pointer-events: none; }
 
 	.admin-btn-danger {
 		font-family: 'Inter', sans-serif;
