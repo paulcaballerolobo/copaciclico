@@ -154,7 +154,6 @@
 		<div class="match-list">
 			{#each filtered as m}
 				<div class="match-card" class:match-arg={isArg(m)}>
-					<!-- Equipos -->
 					<div class="mc-teams">
 						<div class="mc-team mc-home">
 							<span class="mc-flag">{flag(m.team_home)}</span>
@@ -172,15 +171,11 @@
 							<span class="mc-flag">{flag(m.team_away)}</span>
 						</div>
 					</div>
-					<!-- Meta -->
 					<div class="mc-meta">
 						<span class="mc-datetime">{formatDate(m.kickoff_time)} · {formatTime(m.kickoff_time)} hs</span>
 						<span class="mc-dot">·</span>
 						<span class="mc-group">Grupo {m.group_name}</span>
-						{#if m.venue}
-							<span class="mc-dot">·</span>
-							<span class="mc-venue">{m.venue}</span>
-						{/if}
+						{#if m.venue}<span class="mc-dot">·</span><span class="mc-venue">{m.venue}</span>{/if}
 					</div>
 				</div>
 			{/each}
@@ -326,34 +321,38 @@
 	/* ── MATCH CARDS ── */
 	.match-list { display: flex; flex-direction: column; gap: 6px; }
 	.match-card {
-		background: var(--bg-card);
-		border: 1px solid var(--border);
+		background: rgba(91, 155, 213, 0.13);
+		border: 1px solid rgba(91, 155, 213, 0.22);
 		border-radius: 10px;
 		padding: 14px 20px;
-		transition: border-color 0.2s;
+		backdrop-filter: blur(6px);
+		transition: border-color 0.2s, background 0.2s;
 	}
-	.match-card.match-arg { border-left: 3px solid var(--celeste); }
-	.match-card:hover { border-color: rgba(91,155,213,0.25); }
+	.match-card.match-arg {
+		background: rgba(91, 155, 213, 0.2);
+		border-color: rgba(91, 155, 213, 0.45);
+	}
+	.match-card:hover { background: rgba(91, 155, 213, 0.2); }
 
 	.mc-teams {
 		display: flex;
 		align-items: center;
-		gap: 12px;
-		margin-bottom: 8px;
+		justify-content: center;
+		gap: 16px;
+		margin-bottom: 7px;
 	}
 	.mc-team {
 		display: flex;
 		align-items: center;
-		gap: 10px;
-		flex: 1;
+		gap: 8px;
 	}
-	.mc-away { flex-direction: row-reverse; }
-	.mc-flag { font-size: 24px; flex-shrink: 0; }
+	.mc-away { flex-direction: row; }
+	.mc-flag { font-size: 22px; flex-shrink: 0; }
 	.mc-team-info { display: flex; flex-direction: column; }
 	.mc-team-info-right { align-items: flex-end; }
 	.mc-code {
 		font-family: 'Inter', sans-serif;
-		font-size: 16px;
+		font-size: 15px;
 		font-weight: 900;
 		color: #fff;
 		letter-spacing: -0.01em;
@@ -362,39 +361,40 @@
 	.mc-name {
 		font-family: 'Inter', sans-serif;
 		font-size: 10px;
-		color: rgba(255,255,255,0.45);
+		color: rgba(255,255,255,0.55);
 		font-weight: 400;
 	}
 	.mc-vs {
 		font-family: 'DM Mono', monospace;
-		font-size: 11px;
-		color: rgba(255,255,255,0.2);
+		font-size: 10px;
+		color: rgba(255,255,255,0.3);
 		flex-shrink: 0;
-		font-weight: 400;
 	}
 
 	.mc-meta {
 		display: flex;
 		align-items: center;
-		gap: 6px;
+		justify-content: center;
+		gap: 5px;
 		flex-wrap: wrap;
 	}
 	.mc-datetime {
 		font-family: 'DM Mono', monospace;
 		font-size: 11px;
-		color: rgba(255,255,255,0.5);
+		color: rgba(0,0,0,0.65);
+		font-weight: 600;
 	}
 	.mc-group {
 		font-family: 'DM Mono', monospace;
 		font-size: 10px;
-		color: rgba(255,255,255,0.35);
+		color: rgba(0,0,0,0.5);
 	}
 	.mc-venue {
 		font-family: 'DM Mono', monospace;
 		font-size: 10px;
-		color: rgba(255,255,255,0.25);
+		color: rgba(0,0,0,0.4);
 	}
-	.mc-dot { color: rgba(255,255,255,0.15); font-size: 10px; }
+	.mc-dot { color: rgba(0,0,0,0.25); font-size: 10px; }
 
 	.nota { font-size: 11px; color: var(--muted); margin-top: 24px; }
 
