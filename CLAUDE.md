@@ -18,9 +18,27 @@ npm run check:watch  # Type checking in watch mode
 
 No test suite. Type checking (`npm run check`) is the primary correctness tool.
 
+## REGLA CRÍTICA — Dos mundos separados
+
+Este proyecto tiene dos sistemas de datos que NO deben mezclarse sin confirmación explícita:
+
+**1. Mundial de los Datos (`data.ts`)**
+`COUNTRIES`, `GROUPS`, `VARIABLES`, `EDITORIAL`, `STATS_DATA`, `getMetric()` son exclusivos de `/datos`, `/paises`, `/stats`. **NO modificar estos datos sin reconfirmar con el usuario.** Son el núcleo editorial del proyecto y cualquier cambio accidental rompe la experiencia principal.
+
+**2. Prode / Calendario (Supabase)**
+Todo lo que sea fixture, partidos, horarios, equipos y calendario **debe leer y escribir en Supabase**, no en `data.ts`. Esto incluye:
+- `/calendario` — ya usa Supabase ✓
+- `/fixture` (prode) — debe migrar a Supabase
+- `+layout.svelte` (strip de próximo partido) — debe migrar a Supabase
+- Cualquier feature nueva relacionada con partidos o resultados
+
+`MATCHES` en `data.ts` está en proceso de ser eliminado; no agregar nuevas entradas ahí.
+
+---
+
 ## Architecture
 
-SvelteKit app (Svelte 5) with `@sveltejs/adapter-node`. All data is static — no backend, no API calls. Source imports use the `$lib/` alias for `src/lib/`.
+SvelteKit app (Svelte 5) with `@sveltejs/adapter-node`. Source imports use the `$lib/` alias for `src/lib/`.
 
 **Data layer** (`src/lib/data.ts`):
 - `COUNTRIES` — one entry per country with all metric fields (`pobreza`, `gini`, `pisa`, `aprobacion`, `prensa`, `pib`, `cerveza`, `feriados`) plus qualitative fields (`govt`, `leader`, `autocracy`, `economia`, `relacion`, `politico`)
