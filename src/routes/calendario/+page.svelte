@@ -8,6 +8,8 @@
 		match_label: string;
 		phase: string;
 		group_name: string | null;
+		week_number: number;
+		matchday: number | null;
 		kickoff_time: string;
 		team_home: string;
 		team_away: string;
@@ -74,7 +76,7 @@
 
 	onMount(async () => {
 		const [{ data: matchData }, { data: teamData }] = await Promise.all([
-			supabase.from('matches').select('id, match_number, match_label, phase, group_name, kickoff_time, team_home, team_away, venue, status').eq('phase', 'groups').order('kickoff_time'),
+			supabase.from('matches').select('id, match_number, match_label, phase, group_name, week_number, matchday, kickoff_time, team_home, team_away, venue, status').eq('phase', 'groups').order('kickoff_time'),
 			supabase.from('teams').select('code, name, flag, is_placeholder')
 		]);
 		matches = (matchData ?? []) as MatchRow[];
@@ -86,6 +88,16 @@
 	onDestroy(() => { if (interval) clearInterval(interval); });
 
 	$: filtered = activeGroup === 'all' ? matches : matches.filter(m => m.group_name === activeGroup);
+
+	$: grouped = (() => {
+		const map = new Map<number, MatchRow[]>();
+		filtered.forEach(m => {
+			const fd = m.matchday ?? m.week_number ?? 1;
+			if (!map.has(fd)) map.set(fd, []);
+			map.get(fd)!.push(m);
+		});
+		return Array.from(map.entries()).sort(([a], [b]) => a - b);
+	})();
 
 	function pad(n: number) { return String(n).padStart(2, '0'); }
 	function name(code: string) { return teams[code]?.name ?? code; }
@@ -155,7 +167,9 @@
 		<div class="loading">Cargando partidos…</div>
 	{:else}
 		<div class="match-list">
-			{#each filtered as m}
+			{#each grouped as [fecha, ms]}
+				<div class="fecha-header">Fecha {fecha}</div>
+				{#each ms as m}
 				<div class="match-card" class:match-arg={isArg(m)}>
 					<div class="mc-teams">
 						<div class="mc-team mc-home">
@@ -181,6 +195,7 @@
 						{#if m.venue}<span class="mc-dot">·</span><span class="mc-venue">{m.venue}</span>{/if}
 					</div>
 				</div>
+				{/each}
 			{/each}
 		</div>
 	{/if}
@@ -320,6 +335,21 @@
 
 	/* ── LOADING ── */
 	.loading { text-align: center; padding: 40px; color: var(--muted); font-family: 'DM Mono', monospace; font-size: 13px; }
+
+	/* ── FECHA HEADERS ── */
+	.fecha-header {
+		background: #fff;
+		color: #061428;
+		font-family: 'Inter', sans-serif;
+		font-size: 11px;
+		font-weight: 800;
+		letter-spacing: 0.12em;
+		text-transform: uppercase;
+		padding: 8px 16px;
+		border-radius: 8px;
+		margin-top: 12px;
+		margin-bottom: 4px;
+	}
 
 	/* ── MATCH CARDS ── */
 	.match-list { display: flex; flex-direction: column; gap: 6px; }

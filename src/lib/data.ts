@@ -653,12 +653,12 @@ export const EDITORIAL: Record<string, Record<string, string>> = {
 // Horarios en hora argentina (ART = UTC-3)
 export const MATCHES: Match[] = [
 	// Grupo A
-	{ id: 'a1', group: 'A', date: '11 jun', time: '18:00', home: 'MEX', away: 'RSA', venue: 'Estadio Azteca, Ciudad de México' },
-	{ id: 'a2', group: 'A', date: '12 jun', time: '01:00', home: 'KOR', away: 'CZE', venue: 'Estadio Akron, Guadalajara' },
+	{ id: 'a1', group: 'A', date: '11 jun', time: '16:00', home: 'MEX', away: 'RSA', venue: 'Estadio Azteca, Ciudad de México' },
+	{ id: 'a2', group: 'A', date: '11 jun', time: '23:00', home: 'KOR', away: 'CZE', venue: 'Estadio Akron, Guadalajara' },
 	{ id: 'a3', group: 'A', date: '18 jun', time: '13:00', home: 'CZE', away: 'RSA', venue: 'Mercedes-Benz Stadium, Atlanta' },
-	{ id: 'a4', group: 'A', date: '19 jun', time: '00:00', home: 'MEX', away: 'KOR', venue: 'Estadio Akron, Guadalajara' },
-	{ id: 'a5', group: 'A', date: '25 jun', time: '00:00', home: 'CZE', away: 'MEX', venue: 'Estadio Azteca, Ciudad de México' },
-	{ id: 'a6', group: 'A', date: '25 jun', time: '00:00', home: 'RSA', away: 'KOR', venue: 'Estadio BBVA, Monterrey' },
+	{ id: 'a4', group: 'A', date: '18 jun', time: '22:00', home: 'MEX', away: 'KOR', venue: 'Estadio Akron, Guadalajara' },
+	{ id: 'a5', group: 'A', date: '24 jun', time: '22:00', home: 'CZE', away: 'MEX', venue: 'Estadio Azteca, Ciudad de México' },
+	{ id: 'a6', group: 'A', date: '24 jun', time: '22:00', home: 'RSA', away: 'KOR', venue: 'Estadio BBVA, Monterrey' },
 	// Grupo B
 	{ id: 'b1', group: 'B', date: '12 jun', time: '16:00', home: 'CAN', away: 'BIH', venue: 'BMO Field, Toronto' },
 	{ id: 'b2', group: 'B', date: '13 jun', time: '19:00', home: 'QAT', away: 'SUI', venue: "Levi's Stadium, San Francisco" },
