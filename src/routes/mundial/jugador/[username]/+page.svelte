@@ -252,28 +252,17 @@
 
 		// Escuchar cambios en la sesión de trivia del jugador
 		const triviaChannel = supabase
-			.channel(`trivia-${user.id}`)
+			.channel(`trivia-player-${user.id}`)
 			.on(
 				'postgres_changes',
-				{ event: '*', schema: 'public', table: 'trivia_sessions' },
+				{ event: '*', schema: 'public', table: 'trivia_sessions', filter: `user_id=eq.${user!.id}` },
 				(payload) => {
-					// Filtrar manualmente por este usuario
-					const row = (payload.new ?? payload.old) as TriviaSession;
-					if (!row || row.user_id !== user!.id) return;
-
-					if (payload.eventType === 'DELETE') {
-						triviaSession = null;
-						return;
-					}
-
+					if (payload.eventType === 'DELETE') { triviaSession = null; return; }
 					const updated = payload.new as TriviaSession;
 					if (updated.status === 'ready' || updated.status === 'in_progress') {
 						triviaSession = updated;
 					} else if (updated.status === 'completed') {
-						// Si era activa y pasó a completada, recargar conteo
-						if (triviaSession?.id === updated.id) {
-							triviaSession = updated;
-						}
+						triviaSession = updated;
 						triviaCompletedCount += 1;
 					}
 				}
