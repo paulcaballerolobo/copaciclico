@@ -57,6 +57,25 @@
 	let triviaUser: TriviaUser | null = null;
 	let triviaSession: TriviaSession | null = null;
 	let triviaQuestions: TriviaQuestion[] = [];
+	let shuffledOptions: Record<string, { displayLabel: string; text: string; originalLetter: string }[]> = {};
+
+	function buildShuffled(questions: TriviaQuestion[]) {
+		const result: typeof shuffledOptions = {};
+		for (const q of questions) {
+			const opts = [
+				{ originalLetter: 'a', text: q.option_a },
+				{ originalLetter: 'b', text: q.option_b },
+				{ originalLetter: 'c', text: q.option_c },
+				{ originalLetter: 'd', text: q.option_d },
+			];
+			for (let i = opts.length - 1; i > 0; i--) {
+				const j = Math.floor(Math.random() * (i + 1));
+				[opts[i], opts[j]] = [opts[j], opts[i]];
+			}
+			result[q.id] = opts.map((o, i) => ({ ...o, displayLabel: ['a', 'b', 'c', 'd'][i] }));
+		}
+		return result;
+	}
 
 	// Game state
 	let gamePhase: 'idle' | 'question' | 'reveal' | 'done' = 'idle';
@@ -151,6 +170,7 @@
 		triviaQuestions = ids
 			.map((id) => qData.find((q) => q.id === id))
 			.filter(Boolean) as TriviaQuestion[];
+		shuffledOptions = buildShuffled(triviaQuestions);
 	}
 
 	// Lógica central de actualización de sesión — usada por realtime (owner) y polling (observer)
@@ -507,10 +527,9 @@
 
 						<!-- Opciones -->
 						<div class="tv-options">
-							{#each ['a', 'b', 'c', 'd'] as opt}
-								{@const label = getOptionText(currentQ, opt)}
-								{@const isSelected = selectedAnswer === opt}
-								{@const isCorrect = opt === currentQ.correct_answer}
+							{#each (shuffledOptions[currentQ.id] ?? []) as opt}
+								{@const isSelected = selectedAnswer === opt.originalLetter}
+								{@const isCorrect = opt.originalLetter === currentQ.correct_answer}
 								{@const isWrong = gamePhase === 'reveal' && isSelected && !isCorrect}
 								{@const showCorrect = gamePhase === 'reveal' && isCorrect}
 								<button
@@ -520,10 +539,10 @@
 									class:tv-option-wrong={isWrong}
 									class:tv-option-dim={gamePhase === 'reveal' && !isCorrect && !isSelected}
 									disabled={gamePhase === 'reveal' || !isOwner}
-									on:click={() => gamePhase === 'question' && isOwner && handleAnswer(opt)}
+									on:click={() => gamePhase === 'question' && isOwner && handleAnswer(opt.originalLetter)}
 								>
-									<span class="tv-opt-letter">{opt.toUpperCase()}</span>
-									<span class="tv-opt-text">{label}</span>
+									<span class="tv-opt-letter">{opt.displayLabel.toUpperCase()}</span>
+									<span class="tv-opt-text">{opt.text}</span>
 									{#if showCorrect}<span class="tv-opt-badge">✓</span>{/if}
 									{#if isWrong}<span class="tv-opt-badge">✗</span>{/if}
 								</button>
@@ -576,7 +595,7 @@
 											<span class="tv-bd-label">Tu respuesta:</span>
 											<span class="tv-bd-val" class:tv-bd-val-ok={ans?.correct} class:tv-bd-val-fail={wasWrong}>
 												{#if ans && ans.selected !== 'timeout'}
-													<strong>{ans.selected.toUpperCase()}</strong> — {getOptionText(q, ans.selected)}
+													{getOptionText(q, ans.selected)}
 												{:else if ans?.selected === 'timeout'}
 													<em>Tiempo agotado</em>
 												{:else}
@@ -590,7 +609,7 @@
 											<div class="tv-bd-row">
 												<span class="tv-bd-label">Respuesta correcta:</span>
 												<span class="tv-bd-val tv-bd-val-ok">
-													<strong>{q.correct_answer.toUpperCase()}</strong> — {getOptionText(q, q.correct_answer)}
+													{getOptionText(q, q.correct_answer)}
 												</span>
 											</div>
 										{/if}

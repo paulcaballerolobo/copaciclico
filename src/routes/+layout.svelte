@@ -120,9 +120,8 @@
 					<a
 						href={tab.href}
 						class="nav-tab"
-						class:active={tab.trivia ? $page.url.pathname.startsWith('/mundial/trivia') : tab.prode ? ($page.url.pathname.startsWith('/mundial') && !$page.url.pathname.startsWith('/mundial/trivia')) : $page.url.pathname === tab.href}
+						class:active={tab.prode ? $page.url.pathname.startsWith('/mundial') : $page.url.pathname === tab.href}
 						class:nav-tab-prode={tab.prode}
-						class:nav-tab-trivia={tab.trivia}
 					>{tab.label}</a>
 			{/each}
 		</div>
