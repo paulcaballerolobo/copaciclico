@@ -44,6 +44,7 @@
 
 	interface TriviaSession {
 		id: string;
+		user_id: string;
 		phase: string;
 		level_chosen: number;
 		question_ids: string[];
@@ -254,9 +255,27 @@
 			.channel(`trivia-${user.id}`)
 			.on(
 				'postgres_changes',
-				{ event: '*', schema: 'public', table: 'trivia_sessions', filter: `user_id=eq.${user!.id}` },
+				{ event: '*', schema: 'public', table: 'trivia_sessions' },
 				(payload) => {
-					triviaSession = payload.new as TriviaSession;
+					// Filtrar manualmente por este usuario
+					const row = (payload.new ?? payload.old) as TriviaSession;
+					if (!row || row.user_id !== user!.id) return;
+
+					if (payload.eventType === 'DELETE') {
+						triviaSession = null;
+						return;
+					}
+
+					const updated = payload.new as TriviaSession;
+					if (updated.status === 'ready' || updated.status === 'in_progress') {
+						triviaSession = updated;
+					} else if (updated.status === 'completed') {
+						// Si era activa y pasó a completada, recargar conteo
+						if (triviaSession?.id === updated.id) {
+							triviaSession = updated;
+						}
+						triviaCompletedCount += 1;
+					}
 				}
 			)
 			.subscribe();
