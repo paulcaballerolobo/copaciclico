@@ -75,15 +75,21 @@
 
 	let realtimeChannel: ReturnType<typeof supabase.channel> | null = null;
 
+	let watchMode = false; // true = renderizar contenido directo (usado dentro del iframe)
+
 	// ─── BOOT ───────────────────────────────────────────────────
 	onMount(async () => {
 		usernameParam = $page.url.searchParams.get('J') ?? '';
+		watchMode = $page.url.searchParams.get('watch') === '1';
 
 		const { data: cfg } = await supabase.from('config').select('key, value').in('key', ['is_rehearsal_mode']);
 		cfg?.forEach((c) => { if (c.key === 'is_rehearsal_mode') isRehearsalMode = c.value === 'true'; });
 
 		const sessionUser = getSession();
 		isOwner = !!(sessionUser && sessionUser.username === usernameParam);
+
+		// Si no es el dueño y no está en watchMode, mostrar iframe — no cargar datos
+		if (!isOwner && !watchMode) { loadingState = 'ready'; return; }
 
 		if (!usernameParam) { loadingState = 'no-user'; return; }
 
@@ -353,9 +359,19 @@
 	<meta name="robots" content="noindex" />
 </svelte:head>
 
-<div class="trivia-root">
+<div class="trivia-root" class:trivia-root-embed={watchMode}>
 
-	{#if loadingState === 'loading'}
+	{#if !isOwner && !watchMode && usernameParam}
+		<div class="trivia-spectate-wrap">
+			<iframe
+				src="/mundial/trivia?J={usernameParam}&watch=1"
+				class="trivia-spectate-frame"
+				title="Trivia de {usernameParam}"
+				allow="autoplay"
+			></iframe>
+		</div>
+
+	{:else if loadingState === 'loading'}
 		<div class="trivia-center">
 			<div class="tv-spinner"></div>
 			<p class="tv-muted">Cargando trivia…</p>
@@ -618,6 +634,21 @@
 
 <style>
 	:global(body) { background: #0a0a0f !important; }
+	:global(.trivia-root-embed nav),
+	:global(.trivia-root-embed header.site-header) { display: none !important; }
+
+	.trivia-spectate-wrap {
+		width: 100%;
+		height: 100vh;
+		display: flex;
+		flex-direction: column;
+	}
+	.trivia-spectate-frame {
+		flex: 1;
+		width: 100%;
+		border: none;
+		background: #0a0a0f;
+	}
 
 	.trivia-root {
 		min-height: 100vh;
