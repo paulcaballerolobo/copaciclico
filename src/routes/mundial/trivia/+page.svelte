@@ -74,22 +74,18 @@
 	let reportingQuestion: string | null = null;
 
 	let realtimeChannel: ReturnType<typeof supabase.channel> | null = null;
-
-	let watchMode = false; // true = renderizar contenido directo (usado dentro del iframe)
+	let pollInterval: ReturnType<typeof setInterval> | null = null;
 
 	// ─── BOOT ───────────────────────────────────────────────────
 	onMount(async () => {
-		usernameParam = $page.url.searchParams.get('J') ?? '';
-		watchMode = $page.url.searchParams.get('watch') === '1';
+		const sessionUser = getSession();
+		const jParam = $page.url.searchParams.get('J') ?? '';
+		usernameParam = jParam || sessionUser?.username || '';
 
 		const { data: cfg } = await supabase.from('config').select('key, value').in('key', ['is_rehearsal_mode']);
 		cfg?.forEach((c) => { if (c.key === 'is_rehearsal_mode') isRehearsalMode = c.value === 'true'; });
 
-		const sessionUser = getSession();
 		isOwner = !!(sessionUser && sessionUser.username === usernameParam);
-
-		// Si no es el dueño y no está en watchMode, mostrar iframe — no cargar datos
-		if (!isOwner && !watchMode) { loadingState = 'ready'; return; }
 
 		if (!usernameParam) { loadingState = 'no-user'; return; }
 
@@ -103,11 +99,13 @@
 		triviaUser = userData as TriviaUser;
 
 		await loadSession();
-		subscribeRealtime();
+		if (isOwner) subscribeRealtime();
+		else startPolling();
 	});
 
 	onDestroy(() => {
 		if (timerInterval) clearInterval(timerInterval);
+		if (pollInterval) clearInterval(pollInterval);
 		realtimeChannel?.unsubscribe();
 	});
 
@@ -135,7 +133,7 @@
 			currentIdx = answered < triviaSession.question_ids.length ? answered : triviaSession.question_ids.length - 1;
 			correctCount = triviaSession.answers?.filter((a) => a.correct).length ?? 0;
 			gamePhase = answered >= triviaSession.question_ids.length ? 'done' : 'question';
-			if (gamePhase === 'question') startTimer();
+			if (gamePhase === 'question' && isOwner) startTimer();
 		} else if (triviaSession.status === 'completed') {
 			correctCount = triviaSession.score ?? 0;
 			gamePhase = 'done';
@@ -155,6 +153,48 @@
 			.filter(Boolean) as TriviaQuestion[];
 	}
 
+	// Lógica central de actualización de sesión — usada por realtime (owner) y polling (observer)
+	async function applySessionUpdate(updated: TriviaSession) {
+		const isNewSession = !triviaSession || updated.id !== triviaSession.id;
+		triviaSession = updated;
+
+		if (updated.status === 'ready') {
+			if (isNewSession || loadingState === 'no-session') {
+				if (updated.question_ids?.length) await loadQuestions(updated.question_ids);
+				loadingState = 'ready';
+				gamePhase = 'idle';
+				currentIdx = 0;
+				correctCount = 0;
+				selectedAnswer = null;
+				if (timerInterval) clearInterval(timerInterval);
+			}
+		} else if (updated.status === 'in_progress') {
+			if (isNewSession && updated.question_ids?.length) await loadQuestions(updated.question_ids);
+			loadingState = 'ready';
+			const answered = updated.answers?.length ?? 0;
+			correctCount = updated.answers?.filter((a) => a.correct).length ?? 0;
+			if (answered >= updated.question_ids.length) {
+				gamePhase = 'done';
+				if (timerInterval) clearInterval(timerInterval);
+			} else {
+				const newIdx = answered;
+				if (newIdx !== currentIdx || gamePhase !== 'question') {
+					currentIdx = newIdx;
+					selectedAnswer = null;
+					gamePhase = 'question';
+					if (isOwner) startTimer();
+					else if (timerInterval) clearInterval(timerInterval);
+				}
+			}
+		} else if (updated.status === 'completed') {
+			if (isNewSession && updated.question_ids?.length) await loadQuestions(updated.question_ids);
+			correctCount = updated.score ?? 0;
+			gamePhase = 'done';
+			loadingState = 'ready';
+			if (timerInterval) clearInterval(timerInterval);
+		}
+	}
+
 	function subscribeRealtime() {
 		if (!triviaUser) return;
 		realtimeChannel = supabase
@@ -164,44 +204,26 @@
 				{ event: '*', schema: 'public', table: 'trivia_sessions', filter: `user_id=eq.${triviaUser.id}` },
 				async (payload) => {
 					const updated = payload.new as TriviaSession;
-					if (!updated) return;
-					const isNewSession = !triviaSession || updated.id !== triviaSession.id;
-					triviaSession = updated;
-
-					if (updated.status === 'ready' && (loadingState === 'no-session' || isNewSession)) {
-						if (updated.question_ids?.length) await loadQuestions(updated.question_ids);
-						loadingState = 'ready';
-						gamePhase = 'idle';
-						currentIdx = 0;
-						correctCount = 0;
-						selectedAnswer = null;
-						if (timerInterval) clearInterval(timerInterval);
-					} else if (updated.status === 'in_progress') {
-						if (isNewSession && updated.question_ids?.length) await loadQuestions(updated.question_ids);
-						loadingState = 'ready';
-						const answered = updated.answers?.length ?? 0;
-						correctCount = updated.answers?.filter((a) => a.correct).length ?? 0;
-						if (answered >= updated.question_ids.length) {
-							gamePhase = 'done';
-							if (timerInterval) clearInterval(timerInterval);
-						} else {
-							const newIdx = answered;
-							if (newIdx !== currentIdx || gamePhase !== 'question') {
-								currentIdx = newIdx;
-								selectedAnswer = null;
-								gamePhase = 'question';
-								if (!isOwner) { if (timerInterval) clearInterval(timerInterval); }
-								else startTimer();
-							}
-						}
-					} else if (updated.status === 'completed') {
-						correctCount = updated.score ?? 0;
-						gamePhase = 'done';
-						if (timerInterval) clearInterval(timerInterval);
-					}
+					if (updated) await applySessionUpdate(updated);
 				}
 			)
 			.subscribe();
+	}
+
+	function startPolling() {
+		if (!triviaUser) return;
+		pollInterval = setInterval(async () => {
+			if (!triviaUser) return;
+			const { data: ts } = await supabase
+				.from('trivia_sessions')
+				.select('*')
+				.eq('user_id', triviaUser!.id)
+				.in('status', ['ready', 'in_progress', 'completed'])
+				.order('enabled_at', { ascending: false })
+				.limit(1)
+				.single();
+			if (ts) await applySessionUpdate(ts as TriviaSession);
+		}, 2000);
 	}
 
 	// ─── JUEGO ───────────────────────────────────────────────────
@@ -233,7 +255,7 @@
 	}
 
 	async function handleAnswer(selected: string | null) {
-		if (!triviaSession || !triviaQuestions[currentIdx] || isTransitioning) return;
+		if (!triviaSession || !triviaQuestions[currentIdx] || isTransitioning || !isOwner) return;
 		isTransitioning = true;
 		if (timerInterval) clearInterval(timerInterval);
 
@@ -359,19 +381,9 @@
 	<meta name="robots" content="noindex" />
 </svelte:head>
 
-<div class="trivia-root" class:trivia-root-embed={watchMode}>
+<div class="trivia-root">
 
-	{#if !isOwner && !watchMode && usernameParam}
-		<div class="trivia-spectate-wrap">
-			<iframe
-				src="/mundial/trivia?J={usernameParam}&watch=1"
-				class="trivia-spectate-frame"
-				title="Trivia de {usernameParam}"
-				allow="autoplay"
-			></iframe>
-		</div>
-
-	{:else if loadingState === 'loading'}
+	{#if loadingState === 'loading'}
 		<div class="trivia-center">
 			<div class="tv-spinner"></div>
 			<p class="tv-muted">Cargando trivia…</p>
@@ -402,19 +414,6 @@
 		</div>
 
 	{:else}
-		<!-- BARRA SUPERIOR TV -->
-		<header class="tv-header">
-			<div class="tv-logo">
-				<span class="tv-logo-mark">CI</span>
-				<span class="tv-logo-text">CÍCLICO</span>
-				<span class="tv-logo-sep">·</span>
-				<span class="tv-logo-sub">PRODE MUNDIAL</span>
-			</div>
-			{#if isRehearsalMode}
-				<div class="tv-ensayo-badge">⚠️ ENSAYO</div>
-			{/if}
-			<div class="tv-level-badge">{levelLabel(triviaSession.level_chosen)}</div>
-		</header>
 
 		<main class="tv-main">
 
@@ -634,21 +633,6 @@
 
 <style>
 	:global(body) { background: #0a0a0f !important; }
-	:global(.trivia-root-embed nav),
-	:global(.trivia-root-embed header.site-header) { display: none !important; }
-
-	.trivia-spectate-wrap {
-		width: 100%;
-		height: 100vh;
-		display: flex;
-		flex-direction: column;
-	}
-	.trivia-spectate-frame {
-		flex: 1;
-		width: 100%;
-		border: none;
-		background: #0a0a0f;
-	}
 
 	.trivia-root {
 		min-height: 100vh;
