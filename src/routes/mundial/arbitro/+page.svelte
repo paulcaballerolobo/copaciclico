@@ -639,32 +639,43 @@
 		await loadTrivia();
 	}
 
-	let enablingTrivia: Set<string> = new Set();
-
 	async function enableTrivia(userId: string) {
-		if (enablingTrivia.has(userId)) return;
-		enablingTrivia = new Set([...enablingTrivia, userId]);
+		// Bloquear el botón inmediatamente con una sesión optimista
+		const weekPhase = `week_${currentWeek}`;
+		const optimisticSession: TriviaSession = {
+			id: `optimistic-${userId}`,
+			user_id: userId,
+			phase: weekPhase,
+			level_chosen: 2,
+			status: 'ready',
+			score: 0,
+			points_earned: 0,
+			enabled_by_admin: true,
+			enabled_at: new Date().toISOString(),
+			started_at: null,
+			question_ids: [],
+			answers: []
+		};
+		// Agregar o reemplazar en el array local para que el botón se bloquee YA
+		triviaSessions = [
+			...triviaSessions.filter(s => !(s.user_id === userId && (s.status === 'ready' || s.status === 'in_progress' || s.id.startsWith('optimistic')))),
+			optimisticSession
+		];
 
 		try {
-			// Preguntas activas aleatorias
 			const { data: qs, error: qErr } = await supabase
 				.from('trivia_questions')
 				.select('id')
 				.eq('is_active', true)
 				.order('created_at');
 
-			if (qErr) { alert('Error al cargar preguntas: ' + qErr.message); return; }
+			if (qErr) { alert('Error al cargar preguntas: ' + qErr.message); triviaSessions = triviaSessions.filter(s => s.id !== optimisticSession.id); return; }
 
 			const allIds = (qs ?? []).map((q: { id: string }) => q.id);
-			if (allIds.length === 0) { alert('No hay preguntas activas en el banco.'); return; }
+			if (allIds.length === 0) { alert('No hay preguntas activas en el banco.'); triviaSessions = triviaSessions.filter(s => s.id !== optimisticSession.id); return; }
 
-			// Mezclar aleatoriamente y tomar 5
-			const shuffled = allIds.sort(() => Math.random() - 0.5);
-			const questionIds = shuffled.slice(0, 5);
+			const questionIds = allIds.sort(() => Math.random() - 0.5).slice(0, 5);
 
-			// Consultar Supabase directamente (no confiar en el estado en memoria)
-			// Fase = semana actual (1 trivia por semana)
-			const weekPhase = `week_${currentWeek}`;
 			const { data: existing } = await supabase
 				.from('trivia_sessions')
 				.select('id')
@@ -673,7 +684,6 @@
 				.maybeSingle();
 
 			if (existing) {
-				// Ya existe sesión para este usuario+fase → UPDATE
 				const { error } = await supabase.from('trivia_sessions').update({
 					status: 'ready',
 					enabled_by_admin: true,
@@ -685,9 +695,8 @@
 					started_at: null,
 					completed_at: null
 				}).eq('id', existing.id);
-				if (error) { alert('Error al actualizar sesión: ' + error.message); return; }
+				if (error) { alert('Error al actualizar sesión: ' + error.message); }
 			} else {
-				// No existe → INSERT
 				const { error } = await supabase.from('trivia_sessions').insert({
 					user_id: userId,
 					phase: weekPhase,
@@ -699,12 +708,15 @@
 					enabled_at: new Date().toISOString(),
 					is_rehearsal: isRehearsalMode
 				});
-				if (error) { alert('Error al crear sesión: ' + error.message); return; }
+				if (error) { alert('Error al crear sesión: ' + error.message); }
 			}
 
+			// El realtime se encarga de reemplazar la sesión optimista con la real
+			// pero si tarda, recargamos igual
 			await loadTrivia();
-		} finally {
-			enablingTrivia = new Set([...enablingTrivia].filter(id => id !== userId));
+		} catch (e) {
+			// Si algo falla, quitar la sesión optimista para desbloquear el botón
+			triviaSessions = triviaSessions.filter(s => s.id !== optimisticSession.id);
 		}
 	}
 
@@ -1342,7 +1354,6 @@
 						</div>
 						{#each players.filter(p => !p.is_admin) as player}
 							{@const btn = triviaBtnState(player.id, now)}
-							{@const loading = enablingTrivia.has(player.id)}
 							{@const count = triviaCountForUser(player.id)}
 							<div class="admin-trivia-row">
 								<span class="admin-trivia-name">{player.full_name}</span>
@@ -1354,11 +1365,11 @@
 								</span>
 								<span class="mono admin-trivia-status">{triviaStatusForUser(player.id)}</span>
 								<button
-									class="admin-trivia-btn admin-trivia-btn-{loading ? 'loading' : btn.variant}"
-									disabled={btn.disabled || loading}
+									class="admin-trivia-btn admin-trivia-btn-{btn.variant}"
+									disabled={btn.disabled}
 									on:click={() => enableTrivia(player.id)}
 								>
-									{#if loading}⏳ Activando…{:else}{btn.label}{/if}
+									{btn.label}
 								</button>
 							</div>
 						{/each}
