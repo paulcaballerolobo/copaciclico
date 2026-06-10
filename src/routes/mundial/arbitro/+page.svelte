@@ -92,7 +92,7 @@
 	let triviaSessions: TriviaSession[] = [];
 
 	// UI state
-	let activeTab: 'matches' | 'players' | 'trivia' | 'pozo' = 'matches';
+	let activeTab: 'matches' | 'players' | 'trivia' | 'pozo' | 'stats' = 'matches';
 	let loading = true;
 	let savingConfig = false;
 	let modeConfirmDialog = false;
@@ -147,6 +147,20 @@
 	// Pozo
 	let pozoSeedAmount = '';
 	let pozoTotal = 0;
+	let pozoLocked = false;
+
+	// Stats tab
+	type PlayerStats = {
+		player: Player;
+		predPoints: number;
+		triviaPoints: number;
+		pozoPoints: number;
+		votePoints: number;
+		total: number;
+		feed: { label: string; pts: number; date: string }[];
+	};
+	let playerStats: PlayerStats[] = [];
+	let statsLoading = false;
 
 	// ─── MOUNT ────────────────────────────────────────────────────
 	onMount(async () => {
@@ -203,6 +217,7 @@
 		currentWeek = parseInt(cfg.current_week ?? '1');
 		pozoStatus = cfg.pozo_status ?? 'closed';
 		pozoInitialAmount = parseInt(cfg.pozo_initial_amount ?? '500');
+		pozoLocked = cfg.pozo_locked === 'true';
 		triviaPenalty = parseInt(cfg.trivia_penalty_points ?? '2');
 
 		const { data: pozoLog } = await supabase.from('pozo_log').select('amount');
@@ -355,6 +370,23 @@
 
 		if (!preds) return;
 
+		// ── Votos del público ──
+		const { data: votes } = await supabase
+			.from('public_votes').select('vote').eq('match_id', matchId);
+		const voteCounts: Record<string, number> = {};
+		for (const v of (votes ?? []) as { vote: string }[])
+			voteCounts[v.vote] = (voteCounts[v.vote] ?? 0) + 1;
+		const topVoteCount = Math.max(0, ...Object.values(voteCounts));
+		const voteWinners = topVoteCount > 0
+			? Object.keys(voteCounts).filter(uid => voteCounts[uid] === topVoteCount)
+			: [];
+
+		// ── Jugadores que NO pronosticaron ──
+		const nonAdminPlayerIds = players.filter(p => !p.is_admin && p.is_active).map(p => p.id);
+		const predictedUserIds = new Set(preds.map((p: any) => p.user_id));
+		const noPickIds = nonAdminPlayerIds.filter(id => !predictedUserIds.has(id));
+
+		// ── Aplicar puntos por pronósticos ──
 		for (const pred of preds) {
 			const isCorrect = pred.predicted_winner === winner;
 			const exactScoreCorrect = pred.has_exact_score &&
@@ -364,7 +396,22 @@
 			let points = 0;
 			if (isCorrect) points += base;
 			if (exactScoreCorrect) points += Math.round(base * 0.7);
-			if (exactScoreWrong) points -= Math.round(base * 0.4);
+			if (exactScoreWrong) {
+				const penalty = Math.round(base * 0.4);
+				points -= penalty;
+				await addToPozo(penalty, 'exact_score_wrong', pred.id);
+			}
+
+			// Votos: +5 por cada voto recibido
+			const votesReceived = voteCounts[pred.user_id] ?? 0;
+			const votePoints = votesReceived * 5;
+			points += votePoints;
+
+			// Bonus mayoría de votos: +50 (y +50 si acertó marcador)
+			if (voteWinners.includes(pred.user_id)) {
+				points += 50;
+				if (exactScoreCorrect) points += 50;
+			}
 
 			await supabase.from('predictions').update({
 				is_correct: isCorrect,
@@ -377,6 +424,20 @@
 				const current = pred.users?.points_total ?? 0;
 				await supabase.from('users').update({ points_total: Math.max(0, current + points) }).eq('id', pred.user_id);
 			}
+
+			// Puntos negativos van al pozo
+			if (points < 0) await addToPozo(Math.abs(points), 'prediction_loss', pred.id);
+		}
+
+		// ── Penalidad por no pronosticar: -30 pts → pozo ──
+		const NO_PICK_PENALTY = 30;
+		for (const uid of noPickIds) {
+			if (!isRehearsalMode) {
+				const { data: u } = await supabase.from('users').select('points_total').eq('id', uid).single();
+				const newTotal = Math.max(0, (u?.points_total ?? 0) - NO_PICK_PENALTY);
+				await supabase.from('users').update({ points_total: newTotal }).eq('id', uid);
+			}
+			await addToPozo(NO_PICK_PENALTY, 'no_pick', matchId);
 		}
 
 		// Recalcular ranking
@@ -394,6 +455,14 @@
 			payload: {}
 		});
 		triggeringAnimation = false;
+	}
+
+	async function addToPozo(amount: number, sourceType: string, sourceId?: string) {
+		if (amount <= 0) return;
+		const { data: last } = await supabase.from('pozo_log').select('running_total').order('created_at', { ascending: false }).limit(1).maybeSingle();
+		const running = (last?.running_total ?? 0) + amount;
+		await supabase.from('pozo_log').insert({ amount, source_type: sourceType, source_id: sourceId ?? null, running_total: running });
+		pozoTotal = running;
 	}
 
 	async function recalculateRankings() {
@@ -762,8 +831,13 @@
 	// ─── POZO ────────────────────────────────────────────────────
 	async function seedPozo() {
 		const amount = parseInt(pozoSeedAmount);
-		if (isNaN(amount) || amount <= 0) return;
-		await supabase.from('pozo_log').insert({ amount, source_type: 'admin_seed' });
+		if (isNaN(amount) || amount <= 0 || pozoLocked) return;
+		const { data: last } = await supabase.from('pozo_log').select('running_total').order('created_at', { ascending: false }).limit(1).maybeSingle();
+		const running = (last?.running_total ?? 0) + amount;
+		await supabase.from('pozo_log').insert({ amount, source_type: 'admin_seed', running_total: running });
+		await updateConfig('pozo_initial_amount', String(amount));
+		await updateConfig('pozo_locked', 'true');
+		pozoLocked = true;
 		pozoSeedAmount = '';
 		await loadConfig();
 	}
@@ -771,6 +845,68 @@
 	async function openPozo() {
 		await updateConfig('pozo_status', 'open');
 		pozoStatus = 'open';
+	}
+
+	async function loadStats() {
+		statsLoading = true;
+		const pts: Record<string, { pred: number; trivia: number; pozo: number; vote: number }> = {};
+		const feed: Record<string, { label: string; pts: number; date: string }[]> = {};
+
+		for (const p of activePlayers) {
+			pts[p.id] = { pred: 0, trivia: 0, pozo: 0, vote: 0 };
+			feed[p.id] = [];
+		}
+
+		// Pronósticos
+		const { data: preds } = await supabase.from('predictions')
+			.select('user_id, points_earned, matches(team_home, team_away, kickoff_time), is_correct, has_exact_score')
+			.eq('is_rehearsal', isRehearsalMode)
+			.not('points_earned', 'is', null);
+		for (const p of (preds ?? []) as any[]) {
+			if (!pts[p.user_id]) continue;
+			pts[p.user_id].pred += p.points_earned ?? 0;
+			const m = p.matches;
+			const label = m ? `Pronóstico ${m.team_home} vs ${m.team_away}` : 'Pronóstico';
+			feed[p.user_id].push({ label, pts: p.points_earned, date: m?.kickoff_time ?? '' });
+		}
+
+		// Trivias
+		const { data: trivias } = await supabase.from('trivia_sessions')
+			.select('user_id, points_earned, phase, completed_at')
+			.eq('is_rehearsal', isRehearsalMode)
+			.eq('status', 'completed')
+			.not('points_earned', 'is', null);
+		for (const t of (trivias ?? []) as any[]) {
+			if (!pts[t.user_id]) continue;
+			pts[t.user_id].trivia += t.points_earned ?? 0;
+			const phase = t.phase?.match(/^week_(\d+)$/)?.[1];
+			feed[t.user_id].push({ label: `Trivia Semana ${phase ?? t.phase}`, pts: t.points_earned, date: t.completed_at ?? '' });
+		}
+
+		// Pozo ganado
+		const { data: pozoWon } = await supabase.from('pozo_attempts')
+			.select('user_id, points_received, completed_at').eq('status', 'won');
+		for (const z of (pozoWon ?? []) as any[]) {
+			if (!pts[z.user_id]) continue;
+			pts[z.user_id].pozo += z.points_received ?? 0;
+			feed[z.user_id].push({ label: '🏆 Ganó el Pozo', pts: z.points_received, date: z.completed_at ?? '' });
+		}
+
+		// Ordenar feeds cronológicamente
+		for (const id of Object.keys(feed))
+			feed[id].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+		playerStats = activePlayers.map(p => ({
+			player: p,
+			predPoints: pts[p.id]?.pred ?? 0,
+			triviaPoints: pts[p.id]?.trivia ?? 0,
+			pozoPoints: pts[p.id]?.pozo ?? 0,
+			votePoints: pts[p.id]?.vote ?? 0,
+			total: (pts[p.id]?.pred ?? 0) + (pts[p.id]?.trivia ?? 0) + (pts[p.id]?.pozo ?? 0),
+			feed: feed[p.id] ?? []
+		})).sort((a, b) => b.total - a.total);
+
+		statsLoading = false;
 	}
 
 	// ─── TICKER para countdowns de trivia ────────────────────────
@@ -982,7 +1118,8 @@
 				{ id: 'matches', label: '⚽ Partidos' },
 				{ id: 'players', label: '👥 Jugadores' },
 				{ id: 'trivia', label: '🎯 Trivia' },
-				{ id: 'pozo', label: '💰 Pozo' }
+				{ id: 'pozo', label: '💰 Pozo' },
+				{ id: 'stats', label: '📊 Stats' }
 			] as tab}
 				<button
 					class="admin-tab"
@@ -1547,13 +1684,17 @@
 					<div class="admin-pozo-status-badge">Estado: <strong>{pozoStatus}</strong></div>
 
 					<div class="admin-pozo-actions">
-						<div class="prode-field" style="flex:1">
-							<label>Cargar monto inicial</label>
-							<div style="display:flex;gap:8px">
-								<input type="number" bind:value={pozoSeedAmount} placeholder="500" min="1" />
-								<button class="prode-btn-secondary" on:click={seedPozo}>Cargar</button>
+						{#if !pozoLocked}
+							<div class="prode-field" style="flex:1">
+								<label>Monto inicial (se bloquea al cargar)</label>
+								<div style="display:flex;gap:8px">
+									<input type="number" bind:value={pozoSeedAmount} placeholder="300" min="1" />
+									<button class="prode-btn-secondary" on:click={seedPozo}>Cargar y bloquear</button>
+								</div>
 							</div>
-						</div>
+						{:else}
+							<div class="admin-pozo-locked">🔒 Monto inicial fijo: <strong>{pozoInitialAmount.toLocaleString('es-AR')} pts</strong></div>
+						{/if}
 
 						{#if pozoStatus === 'closed'}
 							<button class="prode-btn-primary" on:click={openPozo} style="align-self:flex-end">
@@ -1562,6 +1703,60 @@
 						{/if}
 					</div>
 				</div>
+			</section>
+		{/if}
+
+		<!-- ══ STATS ══ -->
+		{#if activeTab === 'stats'}
+			<section class="admin-section">
+				<div class="admin-stats-header">
+					<h2 class="admin-section-title">Estadísticas de jugadores</h2>
+					<button class="prode-btn-secondary" on:click={loadStats} disabled={statsLoading}>
+						{statsLoading ? 'Calculando…' : '↻ Actualizar'}
+					</button>
+				</div>
+
+				{#if playerStats.length === 0 && !statsLoading}
+					<p class="admin-empty">Hacé click en Actualizar para cargar las estadísticas.</p>
+				{:else if statsLoading}
+					<p class="admin-empty">Calculando…</p>
+				{:else}
+					<div class="admin-stats-grid">
+						{#each playerStats as s}
+							<div class="admin-stats-card card">
+								<div class="admin-stats-player-header">
+									{#if s.player.avatar_url}
+										<img src={s.player.avatar_url} alt={s.player.full_name} class="admin-stats-avatar" />
+									{:else}
+										<div class="admin-stats-avatar-placeholder">{s.player.full_name.charAt(0)}</div>
+									{/if}
+									<div>
+										<div class="admin-stats-name">{s.player.full_name}</div>
+										<div class="admin-stats-total">{s.total} pts</div>
+									</div>
+								</div>
+
+								<div class="admin-stats-breakdown">
+									<span class="admin-stats-pill">⚽ Pronóst. {s.predPoints > 0 ? '+' : ''}{s.predPoints}</span>
+									<span class="admin-stats-pill">🎯 Trivia {s.triviaPoints > 0 ? '+' : ''}{s.triviaPoints}</span>
+									{#if s.pozoPoints > 0}<span class="admin-stats-pill">💰 Pozo +{s.pozoPoints}</span>{/if}
+								</div>
+
+								<div class="admin-stats-feed">
+									{#each s.feed as item}
+										<div class="admin-stats-feed-row" class:feed-pos={item.pts > 0} class:feed-neg={item.pts < 0}>
+											<span class="admin-stats-feed-label">{item.label}</span>
+											<span class="admin-stats-feed-pts">{item.pts > 0 ? '+' : ''}{item.pts}</span>
+										</div>
+									{/each}
+									{#if s.feed.length === 0}
+										<div class="admin-stats-feed-empty">Sin actividad aún</div>
+									{/if}
+								</div>
+							</div>
+						{/each}
+					</div>
+				{/if}
 			</section>
 		{/if}
 
@@ -2344,6 +2539,40 @@
 		margin-top: 8px;
 		flex-wrap: wrap;
 	}
+
+	.admin-pozo-locked {
+		font-size: 14px; color: var(--muted); padding: 8px 12px;
+		background: rgba(255,255,255,0.04); border-radius: 8px; border: 1px solid var(--border);
+	}
+
+	/* ─── STATS ─── */
+	.admin-stats-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+	.admin-stats-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; }
+	.admin-stats-card { padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+	.admin-stats-player-header { display: flex; align-items: center; gap: 10px; }
+	.admin-stats-avatar { width: 40px; height: 40px; border-radius: 50%; object-fit: cover; }
+	.admin-stats-avatar-placeholder {
+		width: 40px; height: 40px; border-radius: 50%;
+		background: var(--celeste); color: #fff; font-weight: 700;
+		display: flex; align-items: center; justify-content: center; font-size: 16px;
+	}
+	.admin-stats-name { font-weight: 600; font-size: 14px; }
+	.admin-stats-total { font-family: 'DM Mono', monospace; font-size: 20px; font-weight: 700; color: var(--celeste); }
+	.admin-stats-breakdown { display: flex; flex-wrap: wrap; gap: 6px; }
+	.admin-stats-pill {
+		font-size: 11px; padding: 3px 8px; border-radius: 20px;
+		background: rgba(255,255,255,0.06); border: 1px solid var(--border); color: var(--muted);
+	}
+	.admin-stats-feed { display: flex; flex-direction: column; gap: 4px; border-top: 1px solid var(--border); padding-top: 10px; }
+	.admin-stats-feed-row {
+		display: flex; justify-content: space-between; align-items: center;
+		font-size: 12px; padding: 3px 0;
+	}
+	.admin-stats-feed-label { color: var(--muted); flex: 1; }
+	.admin-stats-feed-pts { font-family: 'DM Mono', monospace; font-weight: 600; font-size: 13px; }
+	.feed-pos .admin-stats-feed-pts { color: var(--green); }
+	.feed-neg .admin-stats-feed-pts { color: var(--red); }
+	.admin-stats-feed-empty { font-size: 12px; color: var(--muted); font-style: italic; }
 
 	/* ─── PRONÓSTICOS ─── */
 	.admin-preds-toggle { border-top: 1px solid var(--border); padding-top: 10px; }
