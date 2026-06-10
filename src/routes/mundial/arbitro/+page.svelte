@@ -97,6 +97,7 @@
 	let modeTargetReal = false;
 	let triggeringAnimation = false;
 	let broadcastChannel: ReturnType<typeof supabase.channel> | null = null;
+	let triviaRealtimeChannel: ReturnType<typeof supabase.channel> | null = null;
 
 	// Confirmación cierre de pronósticos
 	let closePredsMatch: Match | null = null;
@@ -154,10 +155,31 @@
 		broadcastChannel = supabase.channel('prode-broadcast').subscribe();
 		await loadAll();
 		loading = false;
+
+		// Realtime: escuchar cambios en trivia_sessions para actualizar botones en vivo
+		triviaRealtimeChannel = supabase
+			.channel('admin-trivia-sessions')
+			.on(
+				'postgres_changes',
+				{ event: '*', schema: 'public', table: 'trivia_sessions' },
+				(payload) => {
+					if (payload.eventType === 'INSERT') {
+						triviaSessions = [...triviaSessions, payload.new as TriviaSession];
+					} else if (payload.eventType === 'UPDATE') {
+						triviaSessions = triviaSessions.map((s) =>
+							s.id === (payload.new as TriviaSession).id ? (payload.new as TriviaSession) : s
+						);
+					} else if (payload.eventType === 'DELETE') {
+						triviaSessions = triviaSessions.filter((s) => s.id !== (payload.old as TriviaSession).id);
+					}
+				}
+			)
+			.subscribe();
 	});
 
 	onDestroy(() => {
 		if (broadcastChannel) supabase.removeChannel(broadcastChannel);
+		if (triviaRealtimeChannel) supabase.removeChannel(triviaRealtimeChannel);
 	});
 
 	// ─── CARGA ───────────────────────────────────────────────────
