@@ -632,7 +632,7 @@
 													disabled={reportingQuestion === q.id}
 													on:click={() => impugnarQuestion(q.id)}
 												>
-													{reportingQuestion === q.id ? '⏳ Enviando…' : '🚩 Impugnar esta pregunta'}
+													{reportingQuestion === q.id ? '⏳ Enviando…' : '🚩 Impugnar esta pregunta · Pedí VAR'}
 												</button>
 											{/if}
 										{/if}
