@@ -149,6 +149,23 @@
 	let pozoTotal = 0;
 	let pozoLocked = false;
 
+	// Pronósticos globales
+	interface AllPred {
+		user_id: string;
+		player_name: string;
+		avatar_url: string | null;
+		predicted_winner: string;
+		predicted_home: number | null;
+		predicted_away: number | null;
+		has_exact_score: boolean;
+		points_earned: number | null;
+		is_correct: boolean | null;
+		exact_score_correct: boolean | null;
+	}
+	let allMatchPreds: Record<string, AllPred[]> = {};
+	let selectedPredMatchId: string | null = null;
+	let predsLoading = false;
+
 	// Stats tab
 	type PlayerStats = {
 		player: Player;
@@ -907,6 +924,40 @@
 		})).sort((a, b) => b.total - a.total);
 
 		statsLoading = false;
+	}
+
+	// ─── PRONÓSTICOS GLOBALES ─────────────────────────────────────
+	async function loadAllPreds() {
+		predsLoading = true;
+		const { data } = await supabase
+			.from('predictions')
+			.select('match_id, user_id, predicted_winner, predicted_home, predicted_away, has_exact_score, points_earned, is_correct, exact_score_correct, users(full_name, avatar_url)')
+			.eq('is_rehearsal', isRehearsalMode);
+		allMatchPreds = {};
+		for (const row of (data ?? []) as any[]) {
+			if (!allMatchPreds[row.match_id]) allMatchPreds[row.match_id] = [];
+			allMatchPreds[row.match_id].push({
+				user_id: row.user_id,
+				player_name: row.users?.full_name ?? '?',
+				avatar_url: row.users?.avatar_url ?? null,
+				predicted_winner: row.predicted_winner,
+				predicted_home: row.predicted_home,
+				predicted_away: row.predicted_away,
+				has_exact_score: row.has_exact_score,
+				points_earned: row.points_earned,
+				is_correct: row.is_correct,
+				exact_score_correct: row.exact_score_correct,
+			});
+		}
+		predsLoading = false;
+	}
+
+	function pointsInPlay(match: Match): { winner: number; exact: number; total: number } {
+		const BASE: Record<string, number> = {
+			groups: 100, r32: 200, r16: 400, qf: 800, sf: 1500, '3rd': 800, final: 2000
+		};
+		const base = BASE[match.phase] ?? 100;
+		return { winner: base, exact: Math.round(base * 0.7), total: Math.round(base * 1.7) };
 	}
 
 	// ─── TICKER para countdowns de trivia ────────────────────────
@@ -3270,6 +3321,168 @@
 		font-size: 11px;
 		color: #888;
 		flex-shrink: 0;
+	}
+
+	/* ─── PRONÓSTICOS GLOBALES ─── */
+	.pn-tags-section {
+		display: flex;
+		flex-direction: column;
+		gap: 16px;
+	}
+	.pn-week-group {
+		display: flex;
+		flex-direction: column;
+		gap: 8px;
+	}
+	.pn-week-label {
+		font-family: 'Inter', monospace;
+		font-size: 11px;
+		letter-spacing: 0.15em;
+		text-transform: uppercase;
+		color: var(--celeste);
+		font-weight: 700;
+	}
+	.pn-tags-row {
+		display: flex;
+		gap: 8px;
+		flex-wrap: wrap;
+	}
+	.pn-match-tag {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		padding: 7px 14px;
+		border-radius: 20px;
+		border: 1px solid var(--border);
+		background: rgba(255,255,255,0.04);
+		color: var(--muted);
+		font-size: 13px;
+		font-family: 'Instrument Sans', sans-serif;
+		cursor: pointer;
+		transition: all 0.2s;
+	}
+	.pn-match-tag:hover { border-color: var(--celeste); color: var(--text); background: rgba(91,155,213,0.06); }
+	.pn-match-tag.active { border-color: var(--celeste); background: rgba(91,155,213,0.14); color: #fff; }
+	.pn-tag-teams { font-weight: 600; }
+	.pn-tag-count {
+		font-family: 'DM Mono', monospace;
+		font-size: 11px;
+		font-weight: 800;
+		color: var(--celeste);
+		background: rgba(91,155,213,0.15);
+		border-radius: 10px;
+		padding: 2px 8px;
+		flex-shrink: 0;
+	}
+	.pn-match-tag.active .pn-tag-count { background: rgba(91,155,213,0.28); }
+
+	/* Cards section */
+	.pn-cards-section { display: flex; flex-direction: column; gap: 14px; }
+	.pn-cards-header {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 12px;
+		flex-wrap: wrap;
+		padding: 16px 20px;
+		background: rgba(15,42,90,0.6);
+		border: 1px solid rgba(91,155,213,0.25);
+		border-radius: 14px;
+	}
+	.pn-cards-matchinfo { display: flex; flex-direction: column; gap: 4px; }
+	.pn-cards-vs { font-weight: 800; font-size: 16px; color: #fff; }
+	.pn-cards-date { font-family: 'DM Mono', monospace; font-size: 12px; color: #7090b8; }
+	.pn-cards-count { font-size: 12px; color: #7090b8; }
+	.pn-pip-info { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; }
+	.pn-pip-label {
+		font-family: 'Inter', monospace;
+		font-size: 10px;
+		letter-spacing: 0.12em;
+		text-transform: uppercase;
+		color: #7090b8;
+	}
+	.pn-pip-total {
+		font-family: 'DM Mono', monospace;
+		font-size: 24px;
+		font-weight: 900;
+		color: #f5c200;
+		line-height: 1;
+	}
+	.pn-pip-detail { font-size: 11px; color: #7090b8; }
+
+	/* Cards grid */
+	.pn-cards-grid {
+		display: grid;
+		grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+		gap: 10px;
+	}
+	.pn-card {
+		display: flex;
+		align-items: center;
+		gap: 12px;
+		padding: 14px 16px;
+		border-radius: 14px;
+		background: #0f2a5a;
+		border: 1px solid rgba(91,155,213,0.2);
+		color: #fff;
+		transition: transform 0.15s, box-shadow 0.15s;
+	}
+	.pn-card:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(0,0,0,0.4); }
+	.pn-card.pn-card-correct { border-color: rgba(61,214,140,0.4); background: #0b2e1c; }
+	.pn-card.pn-card-wrong  { border-color: rgba(255,107,107,0.3); background: #2a0e18; }
+
+	/* Avatar */
+	.pn-card-avatar { flex-shrink: 0; }
+	.pn-avatar-img {
+		width: 40px; height: 40px; border-radius: 50%;
+		object-fit: cover;
+		border: 2px solid rgba(255,255,255,0.18);
+	}
+	.pn-avatar-initials {
+		width: 40px; height: 40px; border-radius: 50%;
+		background: rgba(91,155,213,0.25);
+		border: 2px solid rgba(91,155,213,0.45);
+		display: flex; align-items: center; justify-content: center;
+		font-family: 'Inter', sans-serif;
+		font-size: 17px;
+		font-weight: 800;
+		color: #c0d4f0;
+	}
+
+	/* Card body */
+	.pn-card-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 5px; }
+	.pn-card-name {
+		font-size: 13px; font-weight: 700; color: #c0d4f0;
+		white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+	}
+	.pn-card-prediction { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+	.pn-card-winner { font-size: 13px; font-weight: 800; color: #fff; }
+	.pn-card-score {
+		font-family: 'DM Mono', monospace;
+		font-size: 13px; font-weight: 700; color: #a8c4f0;
+	}
+	.pn-card-noscore { font-size: 11px; color: #f5c200; font-style: italic; }
+
+	/* Puntos */
+	.pn-card-pts {
+		flex-shrink: 0;
+		display: flex; flex-direction: column; align-items: flex-end; gap: 2px;
+	}
+	.pn-card-pts-earned {
+		font-family: 'DM Mono', monospace;
+		font-size: 17px; font-weight: 900;
+	}
+	.pn-card-pts-earned.pos { color: #3dd68c; }
+	.pn-card-pts-earned.neg { color: #ff6b6b; }
+	.pn-card-pts-status { font-size: 13px; color: rgba(255,255,255,0.4); }
+	.pn-card-pts-inplay {
+		font-family: 'DM Mono', monospace;
+		font-size: 15px; font-weight: 800; color: #f5c200;
+	}
+	.pn-card-pts-bonus {
+		font-family: 'DM Mono', monospace;
+		font-size: 10px; color: rgba(245,194,0,0.65);
+		white-space: nowrap;
 	}
 
 	/* ─── RESPONSIVE ─── */
