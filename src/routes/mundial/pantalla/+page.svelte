@@ -87,13 +87,13 @@
 		return preds.reduce((sum, pred) => sum + p.winner + (pred.has_exact_score ? p.exact : 0), 0);
 	}
 
-	// Tonos de celeste para las cards (varía por índice)
+	// Tonos de celeste con 10% de transparencia (rgba alpha ~0.88)
 	const CARD_TONES = [
-		{ bg: '#e8f4ff', border: '#b8d8f8' },
-		{ bg: '#f0f8ff', border: '#cce8ff' },
-		{ bg: '#ddeeff', border: '#aad0f0' },
-		{ bg: '#f5faff', border: '#d0e8fa' },
-		{ bg: '#e0f0fc', border: '#b0d4f0' },
+		{ bg: 'rgba(232,244,255,0.88)', border: 'rgba(184,216,248,0.7)' },
+		{ bg: 'rgba(240,248,255,0.88)', border: 'rgba(204,232,255,0.7)' },
+		{ bg: 'rgba(221,238,255,0.88)', border: 'rgba(170,208,240,0.7)' },
+		{ bg: 'rgba(245,250,255,0.88)', border: 'rgba(208,232,250,0.7)' },
+		{ bg: 'rgba(224,240,252,0.88)', border: 'rgba(176,212,240,0.7)' },
 	];
 
 	$: matchesWithPreds = matches.filter(m => (allMatchPreds[m.id]?.length ?? 0) > 0);
@@ -546,6 +546,8 @@
 	/* ── Cards ── */
 	.tv-cards-col {
 		display: flex; flex-direction: column; gap: 10px;
+		width: 50%;
+		min-width: 380px;
 	}
 
 	/* Card bounce al entrar */
