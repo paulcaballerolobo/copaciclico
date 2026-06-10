@@ -297,9 +297,9 @@
 
 	async function finishGame() {
 		if (!triviaSession) return;
-		const POINTS: Record<number, number> = { 1: 5, 2: 10, 3: 20 };
+		const POINTS: Record<number, number> = { 1: 50, 2: 100, 3: 200 };
 		const { data: cfg } = await supabase.from('config').select('value').eq('key', 'trivia_penalty_points').single();
-		const penalty = parseInt(cfg?.value ?? '2');
+		const penalty = parseInt(cfg?.value ?? '25');
 
 		let pts = 0;
 		for (const ans of triviaSession.answers) {
