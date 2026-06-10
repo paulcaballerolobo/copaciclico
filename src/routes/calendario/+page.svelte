@@ -310,15 +310,15 @@
 		border-radius: 20px;
 		border: 1px solid rgba(255,255,255,0.15);
 		cursor: pointer;
-		color: rgba(255,255,255,0.55);
-		background: rgba(255,255,255,0.06);
+		color: #061428;
+		background: #fff;
 		white-space: nowrap;
 		transition: all 0.15s;
 	}
-	.filter-pill:hover { background: rgba(255,255,255,0.1); color: #fff; }
+	.filter-pill:hover { background: #e8f0fa; }
 	.filter-pill.active { background: var(--celeste); color: #fff; border-color: var(--celeste); font-weight: 700; }
-	.pill-arg { color: var(--celeste) !important; border-color: rgba(91,155,213,0.3) !important; }
-	.pill-arg.active { background: var(--celeste) !important; border-color: var(--celeste) !important; }
+	.pill-arg { color: #1a5fa8 !important; border-color: rgba(91,155,213,0.3) !important; }
+	.pill-arg.active { background: var(--celeste) !important; color: #fff !important; border-color: var(--celeste) !important; }
 
 	/* ── LOADING ── */
 	.loading { text-align: center; padding: 40px; color: var(--muted); font-family: 'DM Mono', monospace; font-size: 13px; }
