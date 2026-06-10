@@ -708,12 +708,8 @@
 					enabled_at: new Date().toISOString(),
 					is_rehearsal: isRehearsalMode
 				});
-				if (error) { alert('Error al crear sesión: ' + error.message); }
+				if (error) { alert('Error al crear sesión: ' + error.message); triviaSessions = triviaSessions.filter(s => s.id !== optimisticSession.id); }
 			}
-
-			// El realtime se encarga de reemplazar la sesión optimista con la real
-			// pero si tarda, recargamos igual
-			await loadTrivia();
 		} catch (e) {
 			// Si algo falla, quitar la sesión optimista para desbloquear el botón
 			triviaSessions = triviaSessions.filter(s => s.id !== optimisticSession.id);
@@ -816,20 +812,11 @@
 		}
 
 		if (active.status === 'ready') {
-			const elapsed = active.enabled_at
-				? Math.floor((_now - new Date(active.enabled_at).getTime()) / 1000) : 0;
-			const mm = Math.floor(elapsed / 60).toString().padStart(2, '0');
-			const ss = (elapsed % 60).toString().padStart(2, '0');
-			return { disabled: true, label: `Trivia activada — ⏳ ${mm}:${ss}`, variant: 'activated' };
+			return { disabled: true, label: 'Trivia activada', variant: 'activated' };
 		}
 
 		// in_progress
-		const totalSecs = (active.question_ids?.length ?? 5) * 20;
-		const startedMs = active.started_at ? new Date(active.started_at).getTime() : _now;
-		const remaining = Math.max(0, totalSecs - Math.floor((_now - startedMs) / 1000));
-		const mm = Math.floor(remaining / 60).toString().padStart(2, '0');
-		const ss = (remaining % 60).toString().padStart(2, '0');
-		return { disabled: true, label: `Trivia activada — 🔴 ${mm}:${ss}`, variant: 'activated-live' };
+		return { disabled: true, label: 'Trivia activada', variant: 'activated-live' };
 	}
 
 	// suprimir el linter — weekPhase se calcula dentro de la función
