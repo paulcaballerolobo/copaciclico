@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { goto } from '$app/navigation';
 	import { supabase } from '$lib/supabase';
 	import 'flag-icons/css/flag-icons.min.css';
 	import Trophy from 'phosphor-svelte/lib/Trophy';
@@ -45,6 +46,10 @@
 	let allMatchPreds: Record<string, Pred[]> = {};
 	let selectedMatchId: string | null = null;
 	let loading = true;
+
+	if (typeof window !== 'undefined' && window.innerWidth < 768) {
+		goto('/mundial/pantalla-cel', { replaceState: true });
+	}
 
 	// FIFA code → ISO 3166-1 alpha-2 (para flag-icons CSS)
 	const FIFA_TO_ISO: Record<string, string> = {
