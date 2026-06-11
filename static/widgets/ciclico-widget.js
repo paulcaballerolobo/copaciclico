@@ -34,16 +34,24 @@
       text-transform: uppercase;
       color: rgba(255,255,255,0.25);
     }
+
+    /* ── CARRUSEL ── */
+    .ccw-carousel {
+      position: relative;
+      overflow: hidden;
+    }
+    .ccw-track {
+      display: flex;
+      transition: transform 0.35s cubic-bezier(0.4,0,0.2,1);
+    }
     .ccw-match {
+      min-width: 100%;
       background: rgba(91,155,213,0.12);
       border: 1px solid rgba(91,155,213,0.2);
       border-radius: 10px;
       padding: 14px 16px;
-      margin-bottom: 8px;
-      transition: background 0.2s;
-      cursor: default;
+      box-sizing: border-box;
     }
-    .ccw-match:hover { background: rgba(91,155,213,0.2); }
     .ccw-match-arg {
       background: rgba(91,155,213,0.22);
       border-color: rgba(91,155,213,0.45);
@@ -78,10 +86,30 @@
     }
     .ccw-meta {
       font-size: 11px;
-      color: rgba(255,255,255,0.4);
+      color: #fff;
       text-align: center;
       font-family: monospace;
     }
+
+    /* ── DOTS ── */
+    .ccw-dots {
+      display: flex;
+      justify-content: center;
+      gap: 6px;
+      margin-top: 12px;
+    }
+    .ccw-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: rgba(255,255,255,0.2);
+      cursor: pointer;
+      transition: background 0.2s;
+      border: none;
+      padding: 0;
+    }
+    .ccw-dot.active { background: #5b9bd5; }
+
     .ccw-cta {
       display: block;
       margin-top: 18px;
@@ -138,15 +166,66 @@
           <span class="ccw-code">${m.away.code}</span>
         </div>
       </div>
-      <div class="ccw-meta">${formatDate(m.kickoff)} · ${formatTime(m.kickoff)} hs${m.group ? ' · Grupo ' + m.group : ''}</div>
+      <div class="ccw-meta">${formatDate(m.kickoff)} · ${formatTime(m.kickoff)} hs</div>
     `;
     return div;
   }
 
+  function mountCarousel(body, matches) {
+    const carousel = document.createElement('div');
+    carousel.className = 'ccw-carousel';
+
+    const track = document.createElement('div');
+    track.className = 'ccw-track';
+    matches.forEach(m => track.appendChild(renderMatch(m)));
+    carousel.appendChild(track);
+    body.appendChild(carousel);
+
+    // dots
+    const dots = document.createElement('div');
+    dots.className = 'ccw-dots';
+    let current = 0;
+
+    const dotEls = matches.map((_, i) => {
+      const btn = document.createElement('button');
+      btn.className = 'ccw-dot' + (i === 0 ? ' active' : '');
+      btn.addEventListener('click', () => goTo(i));
+      dots.appendChild(btn);
+      return btn;
+    });
+    body.appendChild(dots);
+
+    function goTo(i) {
+      current = i;
+      track.style.transform = `translateX(-${i * 100}%)`;
+      dotEls.forEach((d, idx) => d.classList.toggle('active', idx === i));
+    }
+
+    // autoplay cada 4s
+    let timer = setInterval(() => goTo((current + 1) % matches.length), 4000);
+
+    // pausa al hover
+    carousel.addEventListener('mouseenter', () => clearInterval(timer));
+    carousel.addEventListener('mouseleave', () => {
+      timer = setInterval(() => goTo((current + 1) % matches.length), 4000);
+    });
+
+    // swipe táctil
+    let startX = 0;
+    carousel.addEventListener('touchstart', e => { startX = e.touches[0].clientX; }, { passive: true });
+    carousel.addEventListener('touchend', e => {
+      const diff = startX - e.changedTouches[0].clientX;
+      if (Math.abs(diff) > 40) goTo(diff > 0 ? Math.min(current + 1, matches.length - 1) : Math.max(current - 1, 0));
+    });
+  }
+
   function mount(container) {
-    const style = document.createElement('style');
-    style.textContent = CSS;
-    document.head.appendChild(style);
+    if (!document.querySelector('#ccw-style')) {
+      const style = document.createElement('style');
+      style.id = 'ccw-style';
+      style.textContent = CSS;
+      document.head.appendChild(style);
+    }
 
     const wrap = document.createElement('div');
     wrap.className = 'ccw-wrap';
@@ -169,7 +248,7 @@
           body.innerHTML = '<div class="ccw-empty">Sin próximos partidos</div>';
           return;
         }
-        matches.forEach(m => body.appendChild(renderMatch(m)));
+        mountCarousel(body, matches);
       })
       .catch(() => {
         body.innerHTML = '<div class="ccw-empty">No se pudo cargar el fixture</div>';
