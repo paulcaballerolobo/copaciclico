@@ -3,6 +3,12 @@
 	import { COUNTRIES, GROUPS, VARIABLES, EDITORIAL, getMetric } from '$lib/data';
 	import type { Variable } from '$lib/types';
 	import { fly, fade } from 'svelte/transition';
+	import { onMount } from 'svelte';
+	import { goto } from '$app/navigation';
+
+	onMount(() => {
+		if (window.innerWidth < 768) goto('/datos-v2', { replaceState: true });
+	});
 
 	const allGroupKeys = Object.keys(GROUPS) as string[];
 	let activeGroups: string[] = allGroupKeys.slice(0, 3); // default: A, B, C
