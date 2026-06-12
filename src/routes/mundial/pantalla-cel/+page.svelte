@@ -88,7 +88,10 @@
 	];
 
 	$: matchesWithPreds = matches.filter(m => (allMatchPreds[m.id]?.length ?? 0) > 0);
-	$: weeks = [...new Set(matchesWithPreds.map(m => m.week_number))].sort((a, b) => a - b);
+	// Último partido disponible primero (más reciente arriba)
+	$: orderedMatches = [...matchesWithPreds].sort(
+		(a, b) => new Date(b.kickoff_time).getTime() - new Date(a.kickoff_time).getTime()
+	);
 	$: selectedMatch = matches.find(m => m.id === selectedMatchId) ?? null;
 	$: selectedPreds = selectedMatchId ? (allMatchPreds[selectedMatchId] ?? []) : [];
 
@@ -123,8 +126,10 @@
 		}
 		allMatchPreds = preds;
 
-		const first = matches.find(m => (preds[m.id]?.length ?? 0) > 0);
-		if (first) selectedMatchId = first.id;
+		// matches viene ordenado por kickoff_time asc → el último con pronósticos es el más reciente
+		const withPreds = matches.filter(m => (preds[m.id]?.length ?? 0) > 0);
+		const latest = withPreds.at(-1);
+		if (latest) selectedMatchId = latest.id;
 
 		loading = false;
 	});
@@ -292,23 +297,21 @@
 				<div class="cel-sheet-handle"></div>
 				<div class="cel-sheet-title">Elegí un partido</div>
 				<div class="cel-sheet-list">
-					{#each weeks as w}
-						{#each matchesWithPreds.filter(m => m.week_number === w) as match}
-							{@const count = allMatchPreds[match.id]?.length ?? 0}
-							<button
-								class="cel-sheet-item"
-								class:active={selectedMatchId === match.id}
-								on:click={() => selectMatch(match.id)}
-							>
-								<div class="cel-sheet-item-teams">
-									{#if teamFlag(match.team_home)}
-										<span class="fi fi-{teamFlag(match.team_home)} cel-si-flag"></span>
-									{/if}
-									<span class="cel-si-name">{teamName(match.team_home)} · {teamName(match.team_away)}</span>
-								</div>
-								<span class="cel-si-badge">{count}</span>
-							</button>
-						{/each}
+					{#each orderedMatches as match}
+						{@const count = allMatchPreds[match.id]?.length ?? 0}
+						<button
+							class="cel-sheet-item"
+							class:active={selectedMatchId === match.id}
+							on:click={() => selectMatch(match.id)}
+						>
+							<div class="cel-sheet-item-teams">
+								{#if teamFlag(match.team_home)}
+									<span class="fi fi-{teamFlag(match.team_home)} cel-si-flag"></span>
+								{/if}
+								<span class="cel-si-name">{teamName(match.team_home)} · {teamName(match.team_away)}</span>
+							</div>
+							<span class="cel-si-badge">{count}</span>
+						</button>
 					{/each}
 				</div>
 			</div>

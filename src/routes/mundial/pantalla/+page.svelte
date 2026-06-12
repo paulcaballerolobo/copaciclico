@@ -102,7 +102,10 @@
 	];
 
 	$: matchesWithPreds = matches.filter(m => (allMatchPreds[m.id]?.length ?? 0) > 0);
-	$: weeks = [...new Set(matchesWithPreds.map(m => m.week_number))].sort((a, b) => a - b);
+	// Último partido disponible primero (más reciente arriba)
+	$: orderedMatches = [...matchesWithPreds].sort(
+		(a, b) => new Date(b.kickoff_time).getTime() - new Date(a.kickoff_time).getTime()
+	);
 	$: selectedMatch = matches.find(m => m.id === selectedMatchId) ?? null;
 	$: selectedPreds = selectedMatchId ? (allMatchPreds[selectedMatchId] ?? []) : [];
 
@@ -137,8 +140,10 @@
 		}
 		allMatchPreds = preds;
 
-		const first = matches.find(m => (preds[m.id]?.length ?? 0) > 0);
-		if (first) selectedMatchId = first.id;
+		// matches viene ordenado por kickoff_time asc → el último con pronósticos es el más reciente
+		const withPreds = matches.filter(m => (preds[m.id]?.length ?? 0) > 0);
+		const latest = withPreds.at(-1);
+		if (latest) selectedMatchId = latest.id;
 
 		loading = false;
 	});
@@ -183,21 +188,19 @@
 
 				<!-- Tags de partidos (sin bandera) -->
 				<nav class="tv-tags-list">
-					{#if matchesWithPreds.length === 0}
+					{#if orderedMatches.length === 0}
 						<span class="tv-tags-empty">Sin pronósticos cargados</span>
 					{:else}
-						{#each weeks as w}
-							{#each matchesWithPreds.filter(m => m.week_number === w) as match}
-								{@const count = allMatchPreds[match.id]?.length ?? 0}
-								<button
-									class="tv-tag"
-									class:active={selectedMatchId === match.id}
-									on:click={() => selectedMatchId = match.id}
-								>
-									<span class="tv-tag-name">{teamName(match.team_home)} · {teamName(match.team_away)}</span>
-									<span class="tv-tag-badge">{count}</span>
-								</button>
-							{/each}
+						{#each orderedMatches as match}
+							{@const count = allMatchPreds[match.id]?.length ?? 0}
+							<button
+								class="tv-tag"
+								class:active={selectedMatchId === match.id}
+								on:click={() => selectedMatchId = match.id}
+							>
+								<span class="tv-tag-name">{teamName(match.team_home)} · {teamName(match.team_away)}</span>
+								<span class="tv-tag-badge">{count}</span>
+							</button>
 						{/each}
 					{/if}
 				</nav>

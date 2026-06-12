@@ -27,13 +27,42 @@
 	let matches: MatchRow[] = [];
 	let teams: Record<string, TeamRow> = {};
 	let loading = true;
-	let activeGroup = 'all';
+	let scope: 'all' | 'arg' = 'all';
+	let selectedDate = '';
 	let interval: ReturnType<typeof setInterval> | null = null;
 	let nextArg: MatchRow | null = null;
 	let countdown = { d: 0, h: 0, m: 0, s: 0 };
 	let argFinished = false;
 
-	const GROUPS = ['A','B','C','D','E','F','G','H','I','J','K','L'];
+	// Fecha local de Argentina (YYYY-MM-DD) para un kickoff UTC
+	function arDate(iso: string): string {
+		return new Date(iso).toLocaleDateString('en-CA', {
+			timeZone: 'America/Argentina/Buenos_Aires'
+		});
+	}
+
+	function cap(s: string): string {
+		return s.charAt(0).toUpperCase() + s.slice(1);
+	}
+
+	// "Martes 16 de junio" — encabezado de día
+	function dateLabel(key: string): string {
+		const [y, mo, d] = key.split('-').map(Number);
+		const dt = new Date(y, mo - 1, d, 12);
+		return cap(dt.toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'long' }));
+	}
+
+	// "mar 16 jun" — opción del selector
+	function dateShort(key: string): string {
+		const [y, mo, d] = key.split('-').map(Number);
+		const dt = new Date(y, mo - 1, d, 12);
+		return cap(dt.toLocaleDateString('es-AR', { weekday: 'short', day: 'numeric', month: 'short' }).replace(/\./g, ''));
+	}
+
+	function setScope(s: 'all' | 'arg') {
+		scope = s;
+		selectedDate = '';
+	}
 
 	function formatDate(iso: string): string {
 		return new Date(iso).toLocaleString('es-AR', {
@@ -87,16 +116,22 @@
 
 	onDestroy(() => { if (interval) clearInterval(interval); });
 
-	$: filtered = activeGroup === 'all' ? matches : matches.filter(m => m.group_name === activeGroup);
+	$: scopeFiltered = scope === 'arg' ? matches.filter(isArg) : matches;
+
+	$: dateOptions = Array.from(new Set(scopeFiltered.map(m => arDate(m.kickoff_time)))).sort();
+
+	$: filtered = selectedDate
+		? scopeFiltered.filter(m => arDate(m.kickoff_time) === selectedDate)
+		: scopeFiltered;
 
 	$: grouped = (() => {
-		const map = new Map<number, MatchRow[]>();
+		const map = new Map<string, MatchRow[]>();
 		filtered.forEach(m => {
-			const fd = m.matchday ?? m.week_number ?? 1;
-			if (!map.has(fd)) map.set(fd, []);
-			map.get(fd)!.push(m);
+			const k = arDate(m.kickoff_time);
+			if (!map.has(k)) map.set(k, []);
+			map.get(k)!.push(m);
 		});
-		return Array.from(map.entries()).sort(([a], [b]) => a - b);
+		return Array.from(map.entries()).sort(([a], [b]) => (a < b ? -1 : 1));
 	})();
 
 	function pad(n: number) { return String(n).padStart(2, '0'); }
@@ -155,20 +190,28 @@
 
 	<!-- Filtros -->
 	<div class="calendar-filter">
-		<button class="filter-pill" class:active={activeGroup === 'all'} on:click={() => activeGroup = 'all'}>Todos</button>
-		{#each GROUPS as g}
-			<button class="filter-pill" class:active={activeGroup === g} class:pill-arg={g === 'J'} on:click={() => activeGroup = g}>
-				{g === 'J' ? '🇦🇷 ' : ''}Grupo {g}
-			</button>
-		{/each}
+		<div class="scope-pills">
+			<button class="filter-pill" class:active={scope === 'all'} on:click={() => setScope('all')}>Todos</button>
+			<button class="filter-pill pill-arg" class:active={scope === 'arg'} on:click={() => setScope('arg')}>🇦🇷 Argentina</button>
+		</div>
+		<div class="date-select">
+			<select bind:value={selectedDate} aria-label="Filtrar por día">
+				<option value="">Todas las fechas</option>
+				{#each dateOptions as d}
+					<option value={d}>{dateShort(d)}</option>
+				{/each}
+			</select>
+		</div>
 	</div>
 
 	{#if loading}
 		<div class="loading">Cargando partidos…</div>
+	{:else if filtered.length === 0}
+		<div class="loading">No hay partidos para este filtro.</div>
 	{:else}
 		<div class="match-list">
 			{#each grouped as [fecha, ms]}
-				<div class="fecha-header">Fecha {fecha}</div>
+				<div class="fecha-header">{dateLabel(fecha)}</div>
 				{#each ms as m}
 				<div class="match-card" class:match-arg={isArg(m)}>
 					<div class="mc-teams">
@@ -313,7 +356,41 @@
 	}
 
 	/* ── FILTROS ── */
-	.calendar-filter { display: flex; gap: 8px; margin-bottom: 20px; flex-wrap: wrap; }
+	.calendar-filter {
+		display: flex;
+		gap: 12px;
+		margin-bottom: 20px;
+		align-items: center;
+		justify-content: space-between;
+		flex-wrap: wrap;
+	}
+	.scope-pills { display: flex; gap: 8px; flex-wrap: wrap; }
+	.date-select { position: relative; }
+	.date-select select {
+		appearance: none;
+		font-family: 'Inter', monospace;
+		font-size: 10px;
+		letter-spacing: 0.08em;
+		text-transform: uppercase;
+		font-weight: 700;
+		padding: 8px 34px 8px 16px;
+		border-radius: 20px;
+		border: 1px solid rgba(91,155,213,0.3);
+		background: #061428;
+		color: #fff;
+		cursor: pointer;
+	}
+	.date-select::after {
+		content: '▾';
+		position: absolute;
+		right: 14px;
+		top: 50%;
+		transform: translateY(-50%);
+		color: var(--celeste);
+		font-size: 11px;
+		pointer-events: none;
+	}
+	.date-select select:focus { outline: none; border-color: var(--celeste); }
 	.filter-pill {
 		font-family: 'Inter', monospace;
 		font-size: 10px;
