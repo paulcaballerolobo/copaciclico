@@ -85,6 +85,16 @@
 	let pozoInitialAmount = 500;
 	let triviaPenalty = 2;
 
+	// Sorteo
+	let raffleEnabled = false;
+	let raffleImageUrl = '';
+	let raffleTitle = '';
+	let raffleText = '';
+	let raffleEntrants = 0;
+	let raffleChances = 0;
+	let raffleUploading = false;
+	let raffleSaving = false;
+
 	// Datos
 	let matches: Match[] = [];
 	let players: Player[] = [];
@@ -92,7 +102,7 @@
 	let triviaSessions: TriviaSession[] = [];
 
 	// UI state
-	let activeTab: 'matches' | 'players' | 'trivia' | 'pozo' | 'stats' = 'matches';
+	let activeTab: 'matches' | 'players' | 'trivia' | 'pozo' | 'sorteo' | 'stats' = 'matches';
 	let loading = true;
 	let savingConfig = false;
 	let modeConfirmDialog = false;
@@ -236,6 +246,13 @@
 		pozoInitialAmount = parseInt(cfg.pozo_initial_amount ?? '500');
 		pozoLocked = cfg.pozo_locked === 'true';
 		triviaPenalty = parseInt(cfg.trivia_penalty_points ?? '2');
+		raffleEnabled = cfg.raffle_enabled === 'true';
+		raffleImageUrl = cfg.raffle_image_url ?? '';
+		raffleTitle = cfg.raffle_title ?? '';
+		raffleText = cfg.raffle_text ?? '';
+
+		const { data: stats } = await supabase.rpc('raffle_stats');
+		if (stats) { raffleEntrants = stats.entrants ?? 0; raffleChances = stats.total_chances ?? 0; }
 
 		const { data: pozoLog } = await supabase.from('pozo_log').select('amount');
 		if (pozoLog) pozoTotal = pozoLog.reduce((s: number, r: { amount: number }) => s + r.amount, 0);
@@ -411,24 +428,27 @@
 			const exactScoreWrong = pred.has_exact_score && !exactScoreCorrect;
 
 			let points = 0;
-			if (isCorrect) points += base;
-			if (exactScoreCorrect) points += Math.round(base * 0.7);
-			if (exactScoreWrong) {
-				const penalty = Math.round(base * 0.4);
-				points -= penalty;
-				await addToPozo(penalty, 'exact_score_wrong', pred.id);
+			let penalty = 0;
+			if (isCorrect) {
+				points += base;
+				if (exactScoreCorrect) {
+					points += Math.round(base * 0.7);
+				} else if (pred.has_exact_score) {
+					// Ganador correcto, marcador errado
+					penalty = Math.round(base * 0.4);
+				}
+			} else {
+				// Ganador incorrecto: penalidad única (no se suma la de marcador)
+				penalty = Math.round(base * 0.4);
 			}
+			points -= penalty;
 
-			// Votos: +5 por cada voto recibido
+			// Votos del público: +1 por voto, +3 por voto si acertó resultado y marcador exacto
 			const votesReceived = voteCounts[pred.user_id] ?? 0;
-			const votePoints = votesReceived * 5;
-			points += votePoints;
+			points += votesReceived * (exactScoreCorrect ? 3 : 1);
 
-			// Bonus mayoría de votos: +50 (y +50 si acertó marcador)
-			if (voteWinners.includes(pred.user_id)) {
-				points += 50;
-				if (exactScoreCorrect) points += 50;
-			}
+			// Bonus al más votado del partido: +30 (independiente del resultado)
+			if (voteWinners.includes(pred.user_id)) points += 30;
 
 			await supabase.from('predictions').update({
 				is_correct: isCorrect,
@@ -442,8 +462,8 @@
 				await supabase.from('users').update({ points_total: Math.max(0, current + points) }).eq('id', pred.user_id);
 			}
 
-			// Puntos negativos van al pozo
-			if (points < 0) await addToPozo(Math.abs(points), 'prediction_loss', pred.id);
+			// La penalidad va al pozo una sola vez
+			if (penalty > 0) await addToPozo(penalty, 'prediction_penalty', pred.id);
 		}
 
 		// ── Penalidad por no pronosticar: -30 pts → pozo ──
@@ -476,8 +496,9 @@
 
 	async function addToPozo(amount: number, sourceType: string, sourceId?: string) {
 		if (amount <= 0) return;
-		const { data: last } = await supabase.from('pozo_log').select('running_total').order('created_at', { ascending: false }).limit(1).maybeSingle();
-		const running = (last?.running_total ?? 0) + amount;
+		const { data: all } = await supabase.from('pozo_log').select('amount');
+		const prevSum = (all ?? []).reduce((s: number, r: { amount: number }) => s + r.amount, 0);
+		const running = prevSum + amount;
 		await supabase.from('pozo_log').insert({ amount, source_type: sourceType, source_id: sourceId ?? null, running_total: running });
 		pozoTotal = running;
 	}
@@ -849,8 +870,9 @@
 	async function seedPozo() {
 		const amount = parseInt(pozoSeedAmount);
 		if (isNaN(amount) || amount <= 0 || pozoLocked) return;
-		const { data: last } = await supabase.from('pozo_log').select('running_total').order('created_at', { ascending: false }).limit(1).maybeSingle();
-		const running = (last?.running_total ?? 0) + amount;
+		const { data: all } = await supabase.from('pozo_log').select('amount');
+		const prevSum = (all ?? []).reduce((s: number, r: { amount: number }) => s + r.amount, 0);
+		const running = prevSum + amount;
 		await supabase.from('pozo_log').insert({ amount, source_type: 'admin_seed', running_total: running });
 		await updateConfig('pozo_initial_amount', String(amount));
 		await updateConfig('pozo_locked', 'true');
@@ -862,6 +884,41 @@
 	async function openPozo() {
 		await updateConfig('pozo_status', 'open');
 		pozoStatus = 'open';
+	}
+
+	// ─── SORTEO ──────────────────────────────────────────────────
+	async function toggleRaffle() {
+		const next = !raffleEnabled;
+		await updateConfig('raffle_enabled', next ? 'true' : 'false');
+		raffleEnabled = next;
+	}
+
+	async function saveRaffleTexts() {
+		raffleSaving = true;
+		await updateConfig('raffle_title', raffleTitle);
+		await updateConfig('raffle_text', raffleText);
+		raffleSaving = false;
+	}
+
+	async function uploadRaffleImage(e: Event) {
+		const input = e.target as HTMLInputElement;
+		const file = input.files?.[0];
+		if (!file) return;
+		raffleUploading = true;
+		const ext = file.name.split('.').pop() || 'png';
+		const path = `modal-${Date.now()}.${ext}`;
+		const { error } = await supabase.storage.from('raffle').upload(path, file, { upsert: true });
+		if (error) { alert('Error al subir: ' + error.message); raffleUploading = false; return; }
+		const { data } = supabase.storage.from('raffle').getPublicUrl(path);
+		raffleImageUrl = data.publicUrl;
+		await updateConfig('raffle_image_url', raffleImageUrl);
+		raffleUploading = false;
+		input.value = '';
+	}
+
+	async function clearRaffleImage() {
+		raffleImageUrl = '';
+		await updateConfig('raffle_image_url', '');
 	}
 
 	async function loadStats() {
@@ -1170,6 +1227,7 @@
 				{ id: 'players', label: '👥 Jugadores' },
 				{ id: 'trivia', label: '🎯 Trivia' },
 				{ id: 'pozo', label: '💰 Pozo' },
+				{ id: 'sorteo', label: '🎁 Sorteo' },
 				{ id: 'stats', label: '📊 Stats' }
 			] as tab}
 				<button
@@ -1753,6 +1811,58 @@
 							</button>
 						{/if}
 					</div>
+				</div>
+			</section>
+		{/if}
+
+		{#if activeTab === 'sorteo'}
+			<section class="admin-section">
+				<h2 class="admin-section-title">Sorteo del público</h2>
+				<div class="card" style="padding:20px;display:flex;flex-direction:column;gap:20px">
+					<div class="admin-raffle-switch">
+						<div>
+							<div class="admin-raffle-switch-title">Sorteo {raffleEnabled ? 'activo' : 'suspendido'}</div>
+							<div class="admin-raffle-switch-sub">
+								{#if raffleEnabled}Al votar se abre el modal pidiendo nombre y email.{:else}El modal no aparece. La gente vota igual, en forma anónima.{/if}
+							</div>
+						</div>
+						<button class="admin-toggle" class:on={raffleEnabled} on:click={toggleRaffle} aria-label="Activar sorteo">
+							<span class="admin-toggle-knob"></span>
+						</button>
+					</div>
+
+					<div class="admin-raffle-stats">
+						<div><strong>{raffleEntrants}</strong> participantes</div>
+						<div><strong>{raffleChances}</strong> chances en total</div>
+					</div>
+
+					<div class="prode-field">
+						<label>Gráfica del modal</label>
+						{#if raffleImageUrl}
+							<img src={raffleImageUrl} alt="Gráfica del sorteo" class="admin-raffle-preview" />
+						{/if}
+						<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+							<label class="prode-btn-secondary" style="cursor:pointer;margin:0">
+								{raffleUploading ? 'Subiendo…' : (raffleImageUrl ? 'Cambiar imagen' : 'Subir imagen')}
+								<input type="file" accept="image/*" on:change={uploadRaffleImage} disabled={raffleUploading} style="display:none" />
+							</label>
+							{#if raffleImageUrl}
+								<button class="admin-btn-danger" on:click={clearRaffleImage}>Quitar</button>
+							{/if}
+						</div>
+					</div>
+
+					<div class="prode-field">
+						<label>Título del modal</label>
+						<input type="text" bind:value={raffleTitle} maxlength="80" placeholder="¡Participá del sorteo!" />
+					</div>
+					<div class="prode-field">
+						<label>Texto del modal</label>
+						<textarea bind:value={raffleText} rows="3" maxlength="280" placeholder="Dejanos tu nombre y email…"></textarea>
+					</div>
+					<button class="prode-btn-primary" on:click={saveRaffleTexts} disabled={raffleSaving} style="align-self:flex-start">
+						{raffleSaving ? 'Guardando…' : 'Guardar textos'}
+					</button>
 				</div>
 			</section>
 		{/if}
@@ -3495,4 +3605,22 @@
 	@media (max-width: 640px) {
 		.admin-wrap { padding: 16px 16px 40px; }
 	}
+
+	/* ── SORTEO ── */
+	.admin-raffle-switch { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+	.admin-raffle-switch-title { font-size: 16px; font-weight: 600; }
+	.admin-raffle-switch-sub { font-size: 13px; color: var(--muted); margin-top: 2px; max-width: 360px; }
+	.admin-toggle {
+		flex: none; width: 52px; height: 30px; border-radius: 999px; border: none; cursor: pointer;
+		background: rgba(255,255,255,0.15); position: relative; transition: background 0.2s;
+	}
+	.admin-toggle.on { background: #3dd68c; }
+	.admin-toggle-knob {
+		position: absolute; top: 3px; left: 3px; width: 24px; height: 24px; border-radius: 50%;
+		background: #fff; transition: transform 0.2s;
+	}
+	.admin-toggle.on .admin-toggle-knob { transform: translateX(22px); }
+	.admin-raffle-stats { display: flex; gap: 24px; font-size: 14px; color: var(--muted); }
+	.admin-raffle-stats strong { color: var(--text); font-size: 20px; font-family: 'DM Mono', monospace; }
+	.admin-raffle-preview { max-width: 220px; width: 100%; height: auto; border-radius: 10px; margin-bottom: 10px; display: block; border: 1px solid var(--border); }
 </style>

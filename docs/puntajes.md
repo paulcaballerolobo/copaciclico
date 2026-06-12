@@ -39,13 +39,30 @@
 
 ---
 
-## Bonus adicionales (todas las fases)
+## Bonus por votos del público (todas las fases)
 
 | Bonus | Puntos |
 |---|---|
-| Votos recibidos del público | +5 por voto |
-| Ser el más votado del partido | +50 |
-| Ser el más votado + marcador exacto | +100 (+50 base +50 extra) |
+| Cada voto del público recibido | +1 por voto |
+| Cada voto del público recibido si el jugador acierta resultado Y marcador exacto | +3 por voto |
+| Ser el jugador con más votos del público en el partido | +30 (independiente del resultado) |
+
+### Cómo funciona el voto del público
+
+- **Quién vota:** cualquier persona, sin login. Identidad anónima por **token de dispositivo** (no IP).
+- **1 voto por dispositivo por partido**, garantizado por la base de datos (`UNIQUE(match_id, voter_token)`).
+- **Solo partidos habilitados** (`predictions_open = true`) y **hasta la hora del partido** (`now() < kickoff_time`).
+- Toda la validación vive en la función `cast_vote()` (Postgres, `SECURITY DEFINER`). `public_votes` está cerrada con RLS: nadie inserta directo, solo vía la función.
+- Los votos **no alimentan el pozo**; solo dan puntos al jugador votado.
+
+### Sorteo
+
+- Se activa/suspende con el switch `raffle_enabled` (tab **Sorteo** del panel de árbitro). Con el switch apagado, el voto sigue siendo anónimo y el modal no aparece.
+- La gráfica y los textos del modal se cargan desde el admin (`raffle_image_url`, `raffle_title`, `raffle_text`).
+- Para participar, el votante deja **nombre + email** (opcional: puede votar sin participar). Se guardan en la tabla `spectators`.
+- **1 chance por partido votado** (`spectators.votes_count`).
+- Persistencia: el `voter_token` vive siempre en localStorage. Si el votante tilda "permanecer registrado", su identidad se guarda en localStorage (todo el torneo); si no, solo en sessionStorage (se olvida al cerrar el navegador).
+- El sorteo final se draftea desde el dashboard de Supabase (los emails no se exponen al cliente); se verifica solo al ganador y se resortea si no responde.
 
 ---
 
