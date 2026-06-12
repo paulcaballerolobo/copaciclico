@@ -2,7 +2,8 @@
 	import { onMount, onDestroy } from 'svelte';
 	import { flip } from 'svelte/animate';
 	import { supabase } from '$lib/supabase';
-	import { formatDateAR, flag } from '$lib/mundial/utils';
+	import 'flag-icons/css/flag-icons.min.css';
+	import { formatDateAR, teamIso } from '$lib/mundial/utils';
 
 	interface Player {
 		id: string;
@@ -469,7 +470,7 @@
 						{#each recentMatches as rm}
 							<div class="prode-recent-row">
 								<span class="prode-recent-teams">
-									{flag(rm.team_home)} {rm.team_home} {rm.result_home}-{rm.result_away} {rm.team_away} {flag(rm.team_away)}
+									<span class="fi fi-{teamIso(rm.team_home)}"></span> {rm.team_home} {rm.result_home}-{rm.result_away} {rm.team_away} <span class="fi fi-{teamIso(rm.team_away)}"></span>
 								</span>
 								{#if rm.correctPredictors.length > 0}
 									<span class="prode-recent-hits">{rm.correctPredictors.join(' · ')}</span>
@@ -520,11 +521,11 @@
 								<div class="pm-card" class:pm-open={isOpen}>
 									<button class="pm-header" on:click={() => expandedMatch = isOpen ? null : match.id}>
 										<div class="pm-teams">
-											<span class="pm-flag">{flag(match.team_home)}</span>
+											<span class="pm-flag fi fi-{teamIso(match.team_home)}"></span>
 											<span class="pm-team">{match.team_home}</span>
 											<span class="pm-vs">vs</span>
 											<span class="pm-team">{match.team_away}</span>
-											<span class="pm-flag">{flag(match.team_away)}</span>
+											<span class="pm-flag fi fi-{teamIso(match.team_away)}"></span>
 										</div>
 										<div class="pm-meta">
 											<span class="pm-time">{formatDateAR(match.kickoff_time)}</span>

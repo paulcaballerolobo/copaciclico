@@ -3,7 +3,8 @@
 	import { page } from '$app/stores';
 	import { supabase } from '$lib/supabase';
 	import { login, getSession, refreshSession, type MundialUser } from '$lib/mundial/auth';
-	import { formatDateAR, flag, pad, sleep } from '$lib/mundial/utils';
+	import 'flag-icons/css/flag-icons.min.css';
+	import { formatDateAR, teamIso, teamName, formatMatchDate, pad, sleep } from '$lib/mundial/utils';
 
 	// ─── TIPOS ───────────────────────────────────────────────────
 	interface Match {
@@ -273,6 +274,7 @@
 			.eq('user_id', user!.id)
 			.order('created_at', { ascending: false });
 		myPredictions = (preds ?? []) as Prediction[];
+		calcMyPoints();
 
 		// Marcar formularios que ya tienen pronóstico enviado
 		myPredictions.forEach((p) => {
@@ -615,8 +617,8 @@
 
 	function phaseLabel(phase: string): string {
 		const map: Record<string, string> = {
-			groups: 'Grupos', r32: '32avos', r16: 'Octavos',
-			qf: 'Cuartos', sf: 'Semis', '3rd': '3er Puesto', final: 'Final'
+			groups: 'Fase de Grupos', r32: 'Fase Eliminatoria', r16: 'Octavos de Final',
+			qf: 'Cuartos de Final', sf: 'Semifinal', '3rd': 'Tercer Puesto', final: 'Final'
 		};
 		return map[phase] ?? phase;
 	}
@@ -630,6 +632,28 @@
 
 	$: openMatchesWithoutPrediction = openMatches.filter((m) => !matchHasPrediction(m.id));
 	$: sentPredictionsForCurrentWeek = myPredictions.filter((p) => p.matches?.week_number === currentWeek || !p.matches?.week_number);
+
+	let earnedPoints = 0;
+
+	async function calcMyPoints(): Promise<void> {
+		if (!user) return;
+
+		console.log('[puntos] predicciones:', myPredictions.map(p => ({ match: p.match_id, points_earned: p.points_earned })));
+
+		const predPoints = myPredictions.reduce((sum, p) => sum + (p.points_earned ?? 0), 0);
+
+		const { data: triviaSessions } = await supabase
+			.from('trivia_sessions')
+			.select('points_earned')
+			.eq('user_id', user.id)
+			.eq('status', 'completed');
+		console.log('[puntos] trivias:', triviaSessions);
+
+		const triviaPoints = (triviaSessions ?? []).reduce((sum: number, s: { points_earned: number }) => sum + (s.points_earned ?? 0), 0);
+
+		console.log('[puntos] pred:', predPoints, 'trivia:', triviaPoints, 'total:', predPoints + triviaPoints);
+		earnedPoints = predPoints + triviaPoints;
+	}
 </script>
 
 <svelte:head>
@@ -732,28 +756,10 @@
 
 				<div class="prode-header-info">
 					<div class="prode-welcome">¡Hola,</div>
-					<div class="prode-playername">{user.full_name.split(' ')[0]}</div>
-					<div class="prode-playerlastname">{user.full_name.split(' ').slice(1).join(' ')}</div>
+					<div class="prode-playername">{user.full_name}</div>
 					{#if isRehearsalMode}
 						<span class="prode-badge-ensayo">ENSAYO</span>
 					{/if}
-				</div>
-
-				<div class="prode-header-stats">
-					<div class="prode-stat">
-						<div class="prode-stat-value">{user.points_total ?? 0}</div>
-						<div class="prode-stat-label">puntos</div>
-					</div>
-					<div class="prode-stat">
-						<div class="prode-stat-value">{user.ranking_position ? `#${user.ranking_position}` : '—'}</div>
-						<div class="prode-stat-label">ranking</div>
-					</div>
-					<div class="prode-stat" title="Trivias completadas / enviadas">
-						<div class="prode-stat-value">
-							{triviaCompletedCount}<span class="prode-stat-trivia-total">/{triviaWeekTotal}</span>
-						</div>
-						<div class="prode-stat-label">trivias</div>
-					</div>
 				</div>
 			</div>
 
@@ -866,30 +872,26 @@
 		{#if openMatchesWithoutPrediction.length > 0}
 			<section class="prode-section">
 				<div class="prode-open-header">
-					<div class="prode-open-header-label">Cargá tus pronósticos</div>
-					<h2 class="prode-open-header-title">Partidos abiertos</h2>
-					<p class="prode-open-header-sub">Una vez confirmado no podés cambiarlo</p>
+					<div class="prode-open-header-left">
+						<div class="prode-open-header-title-top">Partidos</div>
+						<div class="prode-open-header-title-bot">abiertos</div>
+					</div>
+					<div class="prode-open-header-right">
+						<div class="prode-open-header-label">Cargá tus pronósticos</div>
+						<p class="prode-open-header-sub">Una vez confirmado no podés cambiarlo</p>
+					</div>
 				</div>
 
 				<div class="prode-matches-list">
 					{#each openMatchesWithoutPrediction as match}
 						{@const form = predictionForms[match.id] ?? { winner: '', home: '', away: '', submitting: false, submitted: false }}
 						<div class="prode-match-card card">
-							<div class="prode-match-head">
-								<span class="prode-phase-badge">{phaseLabel(match.phase)}{match.group_name ? ` · Grupo ${match.group_name}` : ''}</span>
-								<span class="prode-match-time">{formatDateAR(match.kickoff_time)}</span>
-							</div>
-
-							<div class="prode-match-teams">
-								<div class="prode-team">
-									<span class="prode-team-flag">{flag(match.team_home)}</span>
-									<span class="prode-team-name">{match.team_home}</span>
-								</div>
-								<div class="prode-match-vs">VS</div>
-								<div class="prode-team prode-team-right">
-									<span class="prode-team-name">{match.team_away}</span>
-									<span class="prode-team-flag">{flag(match.team_away)}</span>
-								</div>
+							<div class="prode-match-headline">
+								<span class="prode-headline-time">{formatMatchDate(match.kickoff_time)}</span>
+								<span class="prode-headline-teams">{teamName(match.team_home)} vs {teamName(match.team_away)}</span>
+								{#if match.group_name}
+									<span class="prode-headline-group-pill">Grupo {match.group_name}</span>
+								{/if}
 							</div>
 
 							{#if form.submitted}
@@ -909,7 +911,7 @@
 										class:selected={form.winner === 'home'}
 										on:click={() => selectWinner(match.id, 'home')}
 									>
-										{flag(match.team_home)} {match.team_home}
+										<span class="fi fi-{teamIso(match.team_home)}"></span> {match.team_home}
 									</button>
 									<button
 										class="prode-winner-btn prode-draw-btn"
@@ -923,7 +925,7 @@
 										class:selected={form.winner === 'away'}
 										on:click={() => selectWinner(match.id, 'away')}
 									>
-										{flag(match.team_away)} {match.team_away}
+										<span class="fi fi-{teamIso(match.team_away)}"></span> {match.team_away}
 									</button>
 								</div>
 
@@ -1002,9 +1004,9 @@
 						<div class="prode-sent-card card">
 							<div class="prode-sent-teams">
 								{#if match}
-									<span>{flag(match.team_home)} {match.team_home}</span>
+									<span><span class="fi fi-{teamIso(match.team_home)}"></span> {match.team_home}</span>
 									<span class="prode-sent-vs">vs</span>
-									<span>{match.team_away} {flag(match.team_away)}</span>
+									<span>{match.team_away} <span class="fi fi-{teamIso(match.team_away)}"></span></span>
 								{/if}
 							</div>
 
@@ -1042,7 +1044,7 @@
 		{/if}
 
 		<!-- ── POZO ── -->
-		{#if pozoStatus !== 'closed'}
+		{#if false && pozoStatus !== 'closed'}
 			<section class="prode-section">
 				<div class="section-hero-label">El Pozo</div>
 				<div class="prode-pozo-card card">
@@ -1358,11 +1360,14 @@
 	.prode-welcome { font-size: 12px; color: rgba(255,255,255,0.45); margin-bottom: 1px; }
 	.prode-playername {
 		font-family: 'Inter', sans-serif;
-		font-size: 40px;
+		font-size: 28px;
 		font-weight: 800;
 		letter-spacing: -0.03em;
 		color: #fff;
-		line-height: 1.0;
+		line-height: 1.1;
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
 	}
 	.prode-playerlastname {
 		font-family: 'Inter', sans-serif;
@@ -1442,8 +1447,34 @@
 		border-radius: 16px;
 		padding: 20px 24px;
 		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 16px;
+	}
+	.prode-open-header-left {
+		display: flex;
 		flex-direction: column;
-		gap: 4px;
+		line-height: 1;
+	}
+	.prode-open-header-title-top {
+		font-family: 'Inter', sans-serif;
+		font-size: 22px;
+		font-weight: 900;
+		letter-spacing: -0.03em;
+		color: #e8edf5;
+	}
+	.prode-open-header-title-bot {
+		font-family: 'Inter', sans-serif;
+		font-size: 22px;
+		font-weight: 900;
+		letter-spacing: -0.03em;
+		color: #e8edf5;
+	}
+	.prode-open-header-right {
+		display: flex;
+		flex-direction: column;
+		align-items: flex-end;
+		gap: 2px;
 	}
 	.prode-open-header-label {
 		font-family: 'Inter', monospace;
@@ -1453,18 +1484,11 @@
 		text-transform: uppercase;
 		color: var(--celeste, #5b9bd5);
 	}
-	.prode-open-header-title {
-		font-family: 'Inter', sans-serif;
-		font-size: 22px;
-		font-weight: 900;
-		letter-spacing: -0.03em;
-		color: #e8edf5;
-		margin: 0;
-	}
 	.prode-open-header-sub {
-		font-size: 13px;
+		font-size: 12px;
 		color: rgba(232,237,245,0.55);
-		margin: 2px 0 0;
+		margin: 0;
+		text-align: right;
 	}
 
 	/* ─── TRIVIA ─── */
@@ -1621,58 +1645,44 @@
 	/* ─── PARTIDOS ABIERTOS ─── */
 	.prode-matches-list { display: flex; flex-direction: column; gap: 16px; }
 
-	.prode-match-card { padding: 20px; display: flex; flex-direction: column; gap: 16px; }
-	.prode-match-head {
+	.prode-match-card { padding: 16px 20px; display: flex; flex-direction: column; gap: 14px; background: #fff; }
+	.prode-match-headline {
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
+		gap: 8px;
 		flex-wrap: wrap;
-		gap: 8px;
 	}
-	.prode-phase-badge {
-		font-family: 'Inter', monospace;
-		font-size: 10px;
-		letter-spacing: 0.1em;
-		text-transform: uppercase;
-		color: var(--celeste);
-		background: rgba(91,155,213,0.1);
-		border: 1px solid rgba(91,155,213,0.2);
-		border-radius: 20px;
-		padding: 3px 10px;
-	}
-	.prode-match-time {
-		font-family: 'DM Mono', monospace;
-		font-size: 11px;
-		color: var(--muted);
-	}
-
-	.prode-match-teams {
+	.prode-headline-left {
 		display: flex;
 		align-items: center;
-		justify-content: space-between;
-		gap: 8px;
-	}
-	.prode-team {
-		display: flex;
-		align-items: center;
-		gap: 8px;
-		flex: 1;
-	}
-	.prode-team-right { flex-direction: row-reverse; text-align: right; }
-	.prode-team-flag { font-size: 24px; flex-shrink: 0; }
-	.prode-team-name {
+		gap: 6px;
+		flex-wrap: wrap;
 		font-family: 'Inter', sans-serif;
-		font-size: 14px;
-		font-weight: 700;
-		color: var(--text);
-		line-height: 1.2;
+		font-size: 12px;
+		color: #000;
 	}
-	.prode-match-vs {
-		font-family: 'DM Mono', monospace;
+	.prode-headline-phase { font-weight: 600; color: #000; }
+	.prode-headline-group-pill {
+		font-family: 'Inter', sans-serif;
 		font-size: 11px;
-		color: var(--muted);
-		flex-shrink: 0;
-		padding: 0 4px;
+		font-weight: 700;
+		text-transform: uppercase;
+		letter-spacing: 0.06em;
+		color: #fff;
+		background: #0d2a4a;
+		border-radius: 20px;
+		padding: 2px 8px;
+	}
+	.prode-headline-teams { font-weight: 700; color: var(--celeste); font-size: 13px; }
+	.prode-headline-time {
+		font-family: 'Inter', sans-serif;
+		font-size: 11px;
+		font-weight: 600;
+		color: #000;
+		white-space: nowrap;
+		text-transform: uppercase;
+		letter-spacing: 0.03em;
 	}
 
 	/* Selector de ganador */
@@ -1684,8 +1694,8 @@
 		flex: 1;
 		padding: 12px 8px;
 		border-radius: 10px;
-		border: 1px solid var(--border);
-		background: rgba(255,255,255,0.6);
+		border: 1.5px solid var(--celeste);
+		background: rgba(91,155,213,0.10);
 		font-family: 'Inter', sans-serif;
 		font-size: 13px;
 		font-weight: 600;
@@ -1693,9 +1703,9 @@
 		transition: all 0.15s;
 		text-align: center;
 		line-height: 1.3;
-		color: var(--text);
+		color: var(--celeste);
 	}
-	.prode-winner-btn:hover { border-color: var(--celeste); color: var(--celeste); }
+	.prode-winner-btn:hover { background: rgba(91,155,213,0.2); }
 	.prode-winner-btn.selected {
 		background: var(--celeste);
 		border-color: var(--celeste);
@@ -1904,8 +1914,6 @@
 	/* ─── RESPONSIVE ─── */
 	@media (max-width: 480px) {
 		.prode-login-card { padding: 32px 24px; }
-		.prode-match-teams { flex-direction: column; gap: 12px; }
-		.prode-team-right { flex-direction: row; text-align: left; }
 		.prode-winner-selector { flex-direction: column; }
 		.prode-header { flex-wrap: wrap; }
 	}
