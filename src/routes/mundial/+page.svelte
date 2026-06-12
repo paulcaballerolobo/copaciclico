@@ -80,7 +80,30 @@
 	let userVotes: Record<string, string | null> = {};
 	let votingLoading = false;
 	let expandedMatch: string | null = null;
-	let userIp = '';
+
+	// ─── Voto / Sorteo ───────────────────────────────────────────
+	let voterToken = '';
+	let spectator: { id: string; nombre: string } | null = null;
+	let now = Date.now();
+
+	// Config del sorteo (editable desde el admin)
+	let raffleEnabled = false;
+	let raffleImageUrl = '';
+	let raffleTitle = '';
+	let raffleText = '';
+
+	// Estado del modal
+	let voteModalOpen = false;
+	let pendingVote: { matchId: string; vote: string } | null = null;
+	let formNombre = '';
+	let formEmail = '';
+	let formPersist = true;
+	let formConsent = false;
+	let formError = '';
+	let greeting = '';
+
+	const TOKEN_KEY = 'mundial_voter_token';
+	const SPECTATOR_KEY = 'mundial_spectator';
 
 	let loading = true;
 	let realtimeChannels: ReturnType<typeof supabase.channel>[] = [];
@@ -88,21 +111,44 @@
 	const POSITION_SNAPSHOT_KEY = 'prode_ranking_snapshot';
 
 	// ─── MOUNT ────────────────────────────────────────────────────
+	let nowTimer: ReturnType<typeof setInterval>;
+
 	onMount(async () => {
-		await fetchIp();
+		initVoterIdentity();
 		await loadAll();
 		setupRealtime();
 		loading = false;
+		// Refrescar el reloj cada 30s para cerrar el voto al llegar el kickoff
+		nowTimer = setInterval(() => (now = Date.now()), 30_000);
 	});
 
-	onDestroy(() => realtimeChannels.forEach((ch) => supabase.removeChannel(ch)));
+	onDestroy(() => {
+		realtimeChannels.forEach((ch) => supabase.removeChannel(ch));
+		if (nowTimer) clearInterval(nowTimer);
+	});
 
-	async function fetchIp() {
+	// Token anónimo de dispositivo (siempre en localStorage) + identidad del sorteo
+	function initVoterIdentity() {
 		try {
-			const r = await fetch('https://api.ipify.org?format=json');
-			const j = await r.json();
-			userIp = j.ip ?? '';
-		} catch { userIp = ''; }
+			let t = localStorage.getItem(TOKEN_KEY);
+			if (!t) { t = crypto.randomUUID(); localStorage.setItem(TOKEN_KEY, t); }
+			voterToken = t;
+			const raw = localStorage.getItem(SPECTATOR_KEY) ?? sessionStorage.getItem(SPECTATOR_KEY);
+			spectator = raw ? JSON.parse(raw) : null;
+		} catch { /* navegador sin storage: el voto igual funciona con un token efímero */
+			voterToken = voterToken || crypto.randomUUID();
+		}
+	}
+
+	// persist=true → localStorage (sobrevive al cierre del navegador)
+	// persist=false → sessionStorage (se olvida al cerrar). El token siempre persiste.
+	function saveSpectator(sp: { id: string; nombre: string }, persist: boolean) {
+		spectator = sp;
+		try {
+			const raw = JSON.stringify(sp);
+			if (persist) { localStorage.setItem(SPECTATOR_KEY, raw); sessionStorage.removeItem(SPECTATOR_KEY); }
+			else { sessionStorage.setItem(SPECTATOR_KEY, raw); localStorage.removeItem(SPECTATOR_KEY); }
+		} catch { /* ignore */ }
 	}
 
 	async function applyRehearsalPoints(players: Player[]): Promise<Player[]> {
@@ -162,6 +208,10 @@
 			isRehearsalMode = map.is_rehearsal_mode === 'true';
 			currentWeek = parseInt(map.current_week ?? '1');
 			pozoStatus = map.pozo_status ?? 'closed';
+			raffleEnabled = map.raffle_enabled === 'true';
+			raffleImageUrl = map.raffle_image_url ?? '';
+			raffleTitle = map.raffle_title ?? '';
+			raffleText = map.raffle_text ?? '';
 		}
 
 		// Pozo
@@ -260,15 +310,13 @@
 				matchVotes = byMatch;
 			}
 
-			// Voto de esta IP
-			if (userIp) {
-				const since = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
+			// Votos de este dispositivo (por token)
+			if (voterToken) {
 				const { data: myVotes } = await supabase
 					.from('public_votes')
 					.select('match_id, vote')
 					.in('match_id', ids)
-					.eq('ip', userIp)
-					.gte('created_at', since);
+					.eq('voter_token', voterToken);
 				const uv: typeof userVotes = {};
 				for (const v of myVotes ?? []) uv[(v as any).match_id] = (v as any).vote;
 				userVotes = uv;
@@ -279,18 +327,97 @@
 		}
 	}
 
-	async function submitVote(matchId: string, vote: string) {
-		if (!userIp || userVotes[matchId] || votingLoading) return;
-		votingLoading = true;
-		const { error } = await supabase.from('public_votes').insert({ match_id: matchId, ip: userIp, vote });
-		if (!error) {
-			userVotes = { ...userVotes, [matchId]: vote };
-			const { data } = await supabase.from('public_votes').select('vote').eq('match_id', matchId);
-			const counts: VoteCount = {};
-			for (const v of data ?? []) counts[(v as any).vote] = (counts[(v as any).vote] ?? 0) + 1;
-			matchVotes = { ...matchVotes, [matchId]: counts };
+	// El voto está habilitado solo si el partido está abierto y aún no es la hora del partido
+	function votingOpen(match: Match): boolean {
+		return !!match.predictions_open && new Date(match.kickoff_time).getTime() > now;
+	}
+
+	// Click en un pronóstico: decide si abre el modal del sorteo o vota directo
+	function onVoteClick(match: Match, vote: string) {
+		if (userVotes[match.id] || votingLoading || !votingOpen(match)) return;
+		// Sorteo activo y todavía no se registró en este dispositivo → modal
+		if (raffleEnabled && !spectator) {
+			pendingVote = { matchId: match.id, vote };
+			formNombre = '';
+			formEmail = '';
+			formPersist = true;
+			formConsent = false;
+			formError = '';
+			voteModalOpen = true;
+			return;
 		}
+		// Sorteo apagado, o ya registrado → voto directo (sin fricción)
+		doVote(match.id, vote);
+	}
+
+	// Confirmar desde el modal participando del sorteo
+	async function confirmModalVote() {
+		if (!pendingVote) return;
+		if (!formNombre.trim() || !formEmail.trim()) { formError = 'Completá nombre y email, o elegí "Solo votar".'; return; }
+		if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(formEmail.trim())) { formError = 'El email no parece válido.'; return; }
+		if (!formConsent) { formError = 'Marcá la casilla para participar del sorteo.'; return; }
+		await doVote(pendingVote.matchId, pendingVote.vote, {
+			nombre: formNombre.trim(), email: formEmail.trim(), persist: formPersist, consent: formConsent
+		});
+	}
+
+	// Votar sin participar del sorteo (solo token)
+	async function skipRaffleVote() {
+		if (!pendingVote) return;
+		await doVote(pendingVote.matchId, pendingVote.vote);
+	}
+
+	async function doVote(
+		matchId: string, vote: string,
+		opts?: { nombre?: string; email?: string; persist?: boolean; consent?: boolean }
+	) {
+		if (votingLoading) return;
+		votingLoading = true;
+		formError = '';
+		const { data, error } = await supabase.rpc('cast_vote', {
+			p_match_id: matchId,
+			p_vote: vote,
+			p_token: voterToken,
+			p_spectator_id: spectator?.id ?? null,
+			p_nombre: opts?.nombre ?? null,
+			p_email: opts?.email ?? null,
+			p_consent: opts?.consent ?? false,
+			p_persist: opts?.persist ?? true
+		});
 		votingLoading = false;
+
+		const res = (data ?? {}) as { status?: string; spectator_id?: string; nombre?: string; reason?: string };
+		if (error || !res.status) { formError = 'No se pudo registrar el voto. Probá de nuevo.'; return; }
+
+		if (res.status === 'closed') {
+			formError = '';
+			voteModalOpen = false; pendingVote = null;
+			greet('La votación de este partido ya cerró.');
+			await loadAll();
+			return;
+		}
+		if (res.status === 'invalid') { formError = 'Voto inválido.'; return; }
+
+		// voted | already_voted
+		userVotes = { ...userVotes, [matchId]: vote };
+		if (res.spectator_id && res.nombre) saveSpectator({ id: res.spectator_id, nombre: res.nombre }, opts?.persist ?? true);
+		voteModalOpen = false; pendingVote = null;
+		await refreshCounts(matchId);
+		greet(spectator ? `¡Listo, ${spectator.nombre}! Registramos tu voto.` : '¡Listo! Registramos tu voto.');
+	}
+
+	async function refreshCounts(matchId: string) {
+		const { data } = await supabase.from('public_votes').select('vote').eq('match_id', matchId);
+		const counts: VoteCount = {};
+		for (const v of data ?? []) counts[(v as any).vote] = (counts[(v as any).vote] ?? 0) + 1;
+		matchVotes = { ...matchVotes, [matchId]: counts };
+	}
+
+	let greetTimer: ReturnType<typeof setTimeout>;
+	function greet(msg: string) {
+		greeting = msg;
+		clearTimeout(greetTimer);
+		greetTimer = setTimeout(() => (greeting = ''), 3500);
 	}
 
 	async function animateRanking() {
@@ -505,7 +632,7 @@
 							<h2 class="prode-matches-title">Próximos partidos</h2>
 							<p class="prode-matches-desc">
 								Descubrí cómo están los pronósticos de los próximos partidos y votá apoyando resultados.<br>
-								¿A quién bancás? Por cada voto, el jugador suma 5 puntos por la confianza del público.
+								¿A quién bancás? Cada voto le suma 1 punto al jugador (3 si clava el marcador), y el más votado se lleva un plus de 30.
 							</p>
 						</div>
 						{#if openMatches.length === 0}
@@ -538,6 +665,7 @@
 											{#if preds.length === 0}
 												<p class="pm-empty-preds">Sin pronósticos cargados</p>
 											{:else}
+												{@const closed = !votingOpen(match)}
 												<div class="pm-preds-label">Votos del público</div>
 												<div class="pm-preds-list">
 													{#each preds as pred}
@@ -548,8 +676,8 @@
 															class="pm-vote-btn"
 															class:pm-voted={isMyVote}
 															class:pm-dimmed={!!myVote && !isMyVote}
-															disabled={!!myVote || votingLoading}
-															on:click={() => submitVote(match.id, pred.user_id)}
+															disabled={!!myVote || votingLoading || closed}
+															on:click={() => onVoteClick(match, pred.user_id)}
 														>
 															<div class="pm-vb-top">
 																<span class="pm-vb-name">{pred.full_name}</span>
@@ -563,8 +691,9 @@
 													{/each}
 												</div>
 												<p class="pm-vote-note">
-													{#if myVote}{total} {total === 1 ? 'voto' : 'votos'} en total
-													{:else}Tocá un pronóstico · 1 voto por 24 hs{/if}
+													{#if closed}🔒 La votación de este partido cerró · {total} {total === 1 ? 'voto' : 'votos'} en total
+													{:else if myVote}✓ Ya votaste · {total} {total === 1 ? 'voto' : 'votos'} en total
+													{:else}Tocá un pronóstico · 1 voto por partido{/if}
 												</p>
 											{/if}
 										</div>
@@ -593,6 +722,48 @@
 		</div>
 	{/if}
 </div>
+
+<!-- Toast de saludo -->
+{#if greeting}
+	<div class="vote-toast">{greeting}</div>
+{/if}
+
+<!-- Modal del sorteo -->
+{#if voteModalOpen}
+	<div class="vote-modal-overlay" on:click={() => { voteModalOpen = false; pendingVote = null; }} role="presentation">
+		<div class="vote-modal" on:click|stopPropagation role="dialog" aria-modal="true">
+			<button class="vote-modal-x" on:click={() => { voteModalOpen = false; pendingVote = null; }} aria-label="Cerrar">×</button>
+			{#if raffleImageUrl}
+				<img class="vote-modal-img" src={raffleImageUrl} alt="" />
+			{/if}
+			<h3 class="vote-modal-title">{raffleTitle || '¡Participá del sorteo!'}</h3>
+			{#if raffleText}<p class="vote-modal-text">{raffleText}</p>{/if}
+
+			<div class="vote-modal-form">
+				<input class="vote-modal-input" type="text" placeholder="Tu nombre" bind:value={formNombre} maxlength="60" />
+				<input class="vote-modal-input" type="email" placeholder="Tu email" bind:value={formEmail} maxlength="120" />
+				<label class="vote-modal-check">
+					<input type="checkbox" bind:checked={formConsent} />
+					<span>Quiero participar del sorteo y acepto que me contacten por email.</span>
+				</label>
+				<label class="vote-modal-check">
+					<input type="checkbox" bind:checked={formPersist} />
+					<span>Mantenerme registrado en este dispositivo.</span>
+				</label>
+				{#if formError}<p class="vote-modal-error">{formError}</p>{/if}
+			</div>
+
+			<div class="vote-modal-actions">
+				<button class="vote-modal-btn primary" on:click={confirmModalVote} disabled={votingLoading}>
+					Votar y participar
+				</button>
+				<button class="vote-modal-btn ghost" on:click={skipRaffleVote} disabled={votingLoading}>
+					Solo votar
+				</button>
+			</div>
+		</div>
+	</div>
+{/if}
 
 <style>
 	/* ── BANNER ENSAYO ── */
@@ -963,4 +1134,50 @@
 		.prode-pozo { flex: none; flex-direction: row; border-left: none; border-top: 1px solid rgba(255,255,255,0.08); padding: 16px 24px; align-items: center; }
 		.prode-pozo-inner { flex-direction: row; gap: 10px; }
 	}
+
+	/* ── TOAST ── */
+	.vote-toast {
+		position: fixed; left: 50%; bottom: 28px; transform: translateX(-50%);
+		background: #1c1c1e; color: #fff; border: 1px solid rgba(255,255,255,0.14);
+		padding: 12px 20px; border-radius: 999px; font-size: 14px; font-weight: 500;
+		z-index: 1000; box-shadow: 0 10px 30px rgba(0,0,0,0.4); animation: toast-in 0.25s ease;
+	}
+	@keyframes toast-in { from { opacity: 0; transform: translate(-50%, 10px); } to { opacity: 1; transform: translate(-50%, 0); } }
+
+	/* ── MODAL SORTEO ── */
+	.vote-modal-overlay {
+		position: fixed; inset: 0; background: rgba(0,0,0,0.7); backdrop-filter: blur(4px);
+		display: flex; align-items: center; justify-content: center; z-index: 1001; padding: 20px;
+		animation: toast-in 0.2s ease;
+	}
+	.vote-modal {
+		position: relative; width: 100%; max-width: 420px; background: var(--bg-card, #161618);
+		border: 1px solid rgba(255,255,255,0.1); border-radius: 18px; padding: 28px 24px 24px;
+		box-shadow: 0 24px 60px rgba(0,0,0,0.5);
+	}
+	.vote-modal-x {
+		position: absolute; top: 12px; right: 14px; background: none; border: none; color: rgba(255,255,255,0.45);
+		font-size: 24px; line-height: 1; cursor: pointer; padding: 4px;
+	}
+	.vote-modal-x:hover { color: #fff; }
+	.vote-modal-img { width: 100%; height: auto; border-radius: 12px; margin-bottom: 16px; display: block; }
+	.vote-modal-title { font-size: 20px; font-weight: 700; margin: 0 0 8px; color: #fff; }
+	.vote-modal-text { font-size: 14px; color: rgba(255,255,255,0.6); margin: 0 0 18px; line-height: 1.45; }
+	.vote-modal-form { display: flex; flex-direction: column; gap: 12px; margin-bottom: 18px; }
+	.vote-modal-input {
+		width: 100%; box-sizing: border-box; background: rgba(255,255,255,0.05);
+		border: 1px solid rgba(255,255,255,0.12); border-radius: 10px; padding: 12px 14px;
+		color: #fff; font-size: 15px; font-family: inherit;
+	}
+	.vote-modal-input:focus { outline: none; border-color: var(--orange, #ff7a1a); }
+	.vote-modal-check { display: flex; gap: 9px; align-items: flex-start; font-size: 13px; color: rgba(255,255,255,0.7); cursor: pointer; line-height: 1.4; }
+	.vote-modal-check input { margin-top: 2px; accent-color: var(--orange, #ff7a1a); flex: none; }
+	.vote-modal-error { color: #ff6b6b; font-size: 13px; margin: 2px 0 0; }
+	.vote-modal-actions { display: flex; flex-direction: column; gap: 10px; }
+	.vote-modal-btn { width: 100%; padding: 13px; border-radius: 10px; font-size: 15px; font-weight: 600; cursor: pointer; border: 1px solid transparent; font-family: inherit; }
+	.vote-modal-btn.primary { background: var(--orange, #ff7a1a); color: #1a1a1a; }
+	.vote-modal-btn.primary:hover { filter: brightness(1.08); }
+	.vote-modal-btn.ghost { background: transparent; border-color: rgba(255,255,255,0.16); color: rgba(255,255,255,0.8); }
+	.vote-modal-btn.ghost:hover { border-color: rgba(255,255,255,0.35); color: #fff; }
+	.vote-modal-btn:disabled { opacity: 0.5; cursor: default; }
 </style>
