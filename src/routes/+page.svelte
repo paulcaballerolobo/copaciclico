@@ -48,7 +48,7 @@
 			desc: 'Clasificá los 48 países por pobreza, educación, desigualdad y más. El fixture que nadie se animó a hacer.'
 		},
 		{
-			href: '/mundial/prode',
+			href: '/mundial',
 			num: '02',
 			label: 'Prode Cíclico',
 			desc: '¿Quién gana si compiten por libertad de prensa? ¿Por PIB? Armá tu torneo y descubrí el campeón inesperado.'

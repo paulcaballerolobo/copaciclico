@@ -7,7 +7,7 @@
 	const tabs = [
 		{ href: '/', label: 'Inicio' },
 		{ href: '/datos', label: 'Mundial de los Datos' },
-		{ href: '/stats', label: 'Estadísticas' },
+		{ href: '/calendario', label: 'Calendario' },
 		{ href: '/mundial', label: '🏆 Prode Cíclico', prode: true },
 	];
 
@@ -59,7 +59,6 @@
 	let teamsMap: Record<string, TeamInfo> = {};
 	let strip: StripState | null = null;
 	let cd: CD = { days: 0, hours: 0, mins: 0, secs: 0 };
-	let elapsed = 0;
 	let interval: ReturnType<typeof setInterval>;
 
 	function teamInfo(code: string): TeamInfo {
@@ -74,7 +73,6 @@
 		});
 		if (live) {
 			strip = { mode: 'live', match: live };
-			elapsed = Math.floor((now - new Date(live.kickoff_time).getTime()) / 60000);
 			return;
 		}
 		const next = upcomingMatches
@@ -149,7 +147,6 @@
 			</span>
 			<span class="strip-dot">·</span>
 			<span class="strip-venue">{strip.match.venue ?? ''}</span>
-			<span class="strip-elapsed">min {elapsed}'</span>
 		{:else}
 			<span class="strip-label">PRÓXIMO PARTIDO</span>
 			<span class="strip-match">
@@ -320,14 +317,6 @@
 	@keyframes livePulse {
 		0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(255,68,68,0.6); }
 		50% { opacity: 0.8; box-shadow: 0 0 0 4px rgba(255,68,68,0); }
-	}
-	.strip-elapsed {
-		font-family: 'DM Mono', monospace;
-		font-size: 12px;
-		font-weight: 700;
-		color: #ff4444;
-		margin-left: auto;
-		flex-shrink: 0;
 	}
 	.blink { animation: blinkAnim 2s step-end infinite; }
 	@keyframes blinkAnim { 0%,49%{opacity:1} 50%,100%{opacity:0.15} }
